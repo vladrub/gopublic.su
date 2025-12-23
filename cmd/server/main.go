@@ -3,10 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"gopublic/internal/dashboard"
-	"gopublic/internal/ingress"
-	"gopublic/internal/server"
-	"gopublic/internal/storage"
 	"log"
 	"net/http"
 	"os"
@@ -16,6 +12,12 @@ import (
 
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/acme/autocert"
+
+	"gopublic/internal/config"
+	"gopublic/internal/dashboard"
+	"gopublic/internal/ingress"
+	"gopublic/internal/server"
+	"gopublic/internal/storage"
 )
 
 const shutdownTimeout = 30 * time.Second
@@ -23,37 +25,42 @@ const shutdownTimeout = 30 * time.Second
 func main() {
 	// Load .env file if it exists
 	_ = godotenv.Load()
-	insecureMode := os.Getenv("INSECURE_HTTP") == "true"
 
-	// 1. Initialize Database
-	// It will create the file in the current working directory.
-	// In Docker, we set WORKDIR to /app/data to persist it.
-	if err := storage.InitDB("gopublic.db"); err != nil {
+	// 1. Load and validate configuration
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+
+	// 2. Initialize Database
+	if err := storage.InitDB(cfg.DBPath); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// 2. Initialize Registry
+	// Seed data for local development
+	if cfg.IsLocalDev() || cfg.InsecureMode {
+		storage.SeedData()
+	}
+
+	// 3. Initialize Registry
 	registry := server.NewTunnelRegistry()
 
-	// 3. Initialize Dashboard
-	dashHandler, err := dashboard.NewHandler()
+	// 4. Initialize Dashboard
+	dashHandler, err := dashboard.NewHandlerWithConfig(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize dashboard: %v", err)
 	}
 
-	// 4. Configure TLS & Autocert (if applicable)
-	domain := os.Getenv("DOMAIN_NAME")
-	email := os.Getenv("EMAIL")
-
-	if domain == "" || insecureMode {
-		storage.SeedData() // Seed data for local dev
-	}
-
+	// 5. Configure TLS & Autocert (if applicable)
 	var tlsConfig *tls.Config
 	var autocertManager *autocert.Manager
 
-	if domain != "" && !insecureMode {
-		log.Printf("Configuring HTTPS/TLS for domain: %s", domain)
+	if cfg.IsSecure() {
+		log.Printf("Configuring HTTPS/TLS for domain: %s", cfg.Domain)
 		cacheDir := "certs"
 		if err := os.MkdirAll(cacheDir, 0700); err != nil {
 			log.Fatalf("Failed to create cert cache dir: %v", err)
@@ -62,17 +69,15 @@ func main() {
 		autocertManager = &autocert.Manager{
 			Cache:      autocert.DirCache(cacheDir),
 			Prompt:     autocert.AcceptTOS,
-			HostPolicy: autocert.HostWhitelist(domain, "*."+domain),
-			Email:      email,
+			HostPolicy: autocert.HostWhitelist(cfg.Domain, "*."+cfg.Domain),
+			Email:      cfg.Email,
 		}
 		tlsConfig = autocertManager.TLSConfig()
 	}
 
-	// 5. Start Control Plane (TCP :4443)
-	// Pass TLS config ONLY if we are in production (non-insecure) mode
-	controlPlane := server.NewServer(":4443", registry, tlsConfig)
+	// 6. Start Control Plane
+	controlPlane := server.NewServerWithConfig(cfg, registry, tlsConfig)
 
-	// Channel to collect server errors
 	serverErrors := make(chan error, 4)
 
 	go func() {
@@ -81,24 +86,13 @@ func main() {
 		}
 	}()
 
-	// 6. Start Public Ingress
-	var ingressPort string
-	if insecureMode {
-		ingressPort = ":80"
-	} else {
-		ingressPort = ":8080"
-	}
-	ing := ingress.NewIngress(ingressPort, registry, dashHandler)
+	// 7. Start Public Ingress
+	ing := ingress.NewIngressWithConfig(cfg, registry, dashHandler)
 
-	// Enable HTTPS only if domain is set AND not explicitly disabled
-	useTLS := domain != "" && !insecureMode
-
-	// Track HTTP servers for graceful shutdown
 	var httpServers []*http.Server
 
-	if useTLS {
-		// --- HTTPS Mode (Production) ---
-		// TLS Ingress (443)
+	if cfg.IsSecure() {
+		// HTTPS Mode (Production)
 		httpsServer := &http.Server{
 			Addr:      ":443",
 			Handler:   ing.Handler(),
@@ -128,9 +122,10 @@ func main() {
 		}()
 
 	} else {
-		// --- HTTP Mode (Local/Dev) ---
-		if domain != "" {
-			log.Printf("Starting in INSECURE HTTP mode for domain: %s. Listening on %s", domain, ingressPort)
+		// HTTP Mode (Local/Dev)
+		ingressPort := cfg.IngressPort()
+		if cfg.Domain != "" {
+			log.Printf("Starting in INSECURE HTTP mode for domain: %s. Listening on %s", cfg.Domain, ingressPort)
 		} else {
 			log.Printf("DOMAIN_NAME not set. Starting in HTTP-only mode (Local Dev). Listening on %s", ingressPort)
 		}
@@ -159,18 +154,16 @@ func main() {
 		log.Printf("Server error: %v, initiating shutdown...", err)
 	}
 
-	// Create shutdown context with timeout
+	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
 
-	// Shutdown all HTTP servers
 	for _, srv := range httpServers {
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Printf("HTTP server shutdown error: %v", err)
 		}
 	}
 
-	// Shutdown control plane
 	if err := controlPlane.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Control plane shutdown error: %v", err)
 	}

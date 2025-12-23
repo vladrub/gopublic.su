@@ -2,29 +2,52 @@ package ingress
 
 import (
 	"bufio"
-	"gopublic/internal/dashboard"
-	"gopublic/internal/middleware"
-	"gopublic/internal/server"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"gopublic/internal/config"
+	"gopublic/internal/dashboard"
+	"gopublic/internal/middleware"
+	"gopublic/internal/server"
 )
+
+// hostPattern validates hostnames (RFC 1123 compliant + localhost).
+// Allows alphanumeric, hyphens, dots; max 253 chars; labels max 63 chars.
+var hostPattern = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
 
 type Ingress struct {
 	Registry    *server.TunnelRegistry
 	DashHandler *dashboard.Handler
 	Port        string
+	RootDomain  string // Root domain for routing
+	IsSecure    bool   // Whether running in secure mode
 }
 
+// NewIngressWithConfig creates a new ingress with the given configuration.
+func NewIngressWithConfig(cfg *config.Config, registry *server.TunnelRegistry, dash *dashboard.Handler) *Ingress {
+	return &Ingress{
+		Registry:    registry,
+		DashHandler: dash,
+		Port:        cfg.IngressPort(),
+		RootDomain:  cfg.Domain,
+		IsSecure:    cfg.IsSecure(),
+	}
+}
+
+// NewIngress creates a new ingress (deprecated, use NewIngressWithConfig).
 func NewIngress(port string, registry *server.TunnelRegistry, dash *dashboard.Handler) *Ingress {
 	return &Ingress{
 		Registry:    registry,
 		DashHandler: dash,
 		Port:        port,
+		RootDomain:  os.Getenv("DOMAIN_NAME"),
+		IsSecure:    false,
 	}
 }
 
@@ -34,12 +57,8 @@ func (i *Ingress) Handler() http.Handler {
 
 	r := gin.Default()
 
-	// Determine if we're in secure mode (HTTPS)
-	rootDomain := os.Getenv("DOMAIN_NAME")
-	isSecure := rootDomain != "" && rootDomain != "localhost" && rootDomain != "127.0.0.1"
-
 	// Add CSRF middleware for dashboard routes
-	r.Use(middleware.SetCSRFToken(&middleware.CSRFConfig{Secure: isSecure}))
+	r.Use(middleware.SetCSRFToken(&middleware.CSRFConfig{Secure: i.IsSecure}))
 
 	// Register Dashboard Routes (will be handled via Host matching in middleware or here)
 	// Actually, `dashboard.Handler.RegisterRoutes` registers routes on `r`.
@@ -107,58 +126,118 @@ func (i *Ingress) Start() error {
 	return http.ListenAndServe(i.Port, i.Handler())
 }
 
+// handleRequest routes incoming requests to the appropriate handler.
 func (i *Ingress) handleRequest(c *gin.Context) {
-	host := c.Request.Host
-	if strings.Contains(host, ":") {
-		host = strings.Split(host, ":")[0]
-	}
-
-	rootDomain := os.Getenv("DOMAIN_NAME")
-
-	// DEBUG LOG
-	log.Printf("Ingress Debug: Host=%s, RootDomain=%s", host, rootDomain)
-
-	// 1. Determine Routes
-	isLocalDev := rootDomain == "127.0.0.1" || rootDomain == "localhost"
-	isDashboard := (rootDomain != "" && host == "app."+rootDomain) || (isLocalDev && host == rootDomain)
-
-	// 2. Landing Page (Only if NOT local dev and matches root)
-	if !isLocalDev && rootDomain != "" && host == rootDomain {
-		c.Header("Content-Type", "text/html")
-		c.String(http.StatusOK, "<h1>Welcome to GoPublic</h1><p>Fast, simple, secure tunnels.</p><a href='http://app."+rootDomain+"'>Go to Dashboard</a>")
+	host, valid := i.parseAndValidateHost(c.Request.Host)
+	if !valid {
+		c.String(http.StatusBadRequest, "Invalid host header")
 		return
 	}
 
-	// 3. Dashboard
-	if isDashboard {
-		if c.Request.URL.Path == "/login" {
-			i.DashHandler.Login(c)
-			return
-		}
-		if c.Request.URL.Path == "/" {
-			i.DashHandler.Index(c)
-			return
-		}
-		if c.Request.URL.Path == "/auth/telegram" {
-			i.DashHandler.TelegramCallback(c)
-			return
-		}
-		if c.Request.URL.Path == "/logout" {
-			i.DashHandler.Logout(c)
-			return
-		}
+	// Route based on host
+	switch {
+	case i.isLandingPage(host):
+		i.serveLandingPage(c)
+	case i.isDashboardHost(host):
+		i.serveDashboard(c)
+	default:
+		i.proxyToTunnel(c, host)
+	}
+}
+
+// parseAndValidateHost extracts and validates the hostname.
+// Returns the hostname and whether it's valid.
+func (i *Ingress) parseAndValidateHost(host string) (string, bool) {
+	// Remove port if present
+	if idx := strings.Index(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+
+	// Empty host is invalid
+	if host == "" {
+		return "", false
+	}
+
+	// Check max length (RFC 1123)
+	if len(host) > 253 {
+		return "", false
+	}
+
+	// Validate format (alphanumeric, hyphens, dots only)
+	if !hostPattern.MatchString(host) {
+		return "", false
+	}
+
+	return strings.ToLower(host), true
+}
+
+// parseHost extracts the hostname without port (deprecated, use parseAndValidateHost).
+func (i *Ingress) parseHost(host string) string {
+	if idx := strings.Index(host, ":"); idx != -1 {
+		return host[:idx]
+	}
+	return host
+}
+
+// isLocalDev returns true if running in local development mode.
+func (i *Ingress) isLocalDev() bool {
+	return i.RootDomain == "" || i.RootDomain == "127.0.0.1" || i.RootDomain == "localhost"
+}
+
+// isLandingPage returns true if the host matches the root domain (non-dev mode).
+func (i *Ingress) isLandingPage(host string) bool {
+	return !i.isLocalDev() && i.RootDomain != "" && host == i.RootDomain
+}
+
+// isDashboardHost returns true if the host should serve the dashboard.
+func (i *Ingress) isDashboardHost(host string) bool {
+	if i.RootDomain == "" {
+		return false
+	}
+	if i.isLocalDev() {
+		return host == i.RootDomain
+	}
+	return host == "app."+i.RootDomain
+}
+
+// serveLandingPage renders the public landing page.
+func (i *Ingress) serveLandingPage(c *gin.Context) {
+	scheme := "http"
+	if i.IsSecure {
+		scheme = "https"
+	}
+	c.Header("Content-Type", "text/html")
+	c.String(http.StatusOK, `<h1>Welcome to GoPublic</h1>
+<p>Fast, simple, secure tunnels.</p>
+<a href='`+scheme+`://app.`+i.RootDomain+`'>Go to Dashboard</a>`)
+}
+
+// serveDashboard routes requests to dashboard handlers.
+func (i *Ingress) serveDashboard(c *gin.Context) {
+	switch c.Request.URL.Path {
+	case "/":
+		i.DashHandler.Index(c)
+	case "/login":
+		i.DashHandler.Login(c)
+	case "/auth/telegram":
+		i.DashHandler.TelegramCallback(c)
+	case "/logout":
+		i.DashHandler.Logout(c)
+	default:
 		c.String(http.StatusNotFound, "Not Found")
-		return
 	}
+}
 
-	// 3. Look up session (User Tunnels)
+// proxyToTunnel forwards the request to a tunnel client.
+func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
+	// Look up session
 	session, ok := i.Registry.GetSession(host)
 	if !ok {
 		c.String(http.StatusNotFound, "Tunnel not found for host: %s", host)
 		return
 	}
 
-	// 2. Open Stream
+	// Open stream to tunnel client
 	stream, err := session.Open()
 	if err != nil {
 		log.Printf("Failed to open stream for host %s: %v", host, err)
@@ -167,25 +246,14 @@ func (i *Ingress) handleRequest(c *gin.Context) {
 	}
 	defer stream.Close()
 
-	// 3. Forward Request
-	// We need to clone the request or just write it.
-	// `c.Request` is the incoming request.
-	// CAUTION: RequestURI might be missing or absolute URI depending on how it came in.
-	// We want to send path and query.
-
-	// We'll write the request as valid HTTP to the stream.
-	// But we should verify if we need to modify headers (e.g. X-Forwarded-For).
-
-	// Write entire request to session stream
-	err = c.Request.Write(stream)
-	if err != nil {
+	// Forward request
+	if err := c.Request.Write(stream); err != nil {
 		log.Printf("Failed to write request to stream: %v", err)
 		c.Status(http.StatusBadGateway)
 		return
 	}
 
-	// 4. Read Response
-	// We use http.ReadResponse to parse the bytes coming back from the tunnel
+	// Read and forward response
 	resp, err := http.ReadResponse(bufio.NewReader(stream), c.Request)
 	if err != nil {
 		log.Printf("Failed to read response from stream: %v", err)
@@ -194,12 +262,14 @@ func (i *Ingress) handleRequest(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	// 5. Write Response back to user
+	// Copy headers
 	for k, vv := range resp.Header {
 		for _, v := range vv {
 			c.Writer.Header().Add(k, v)
 		}
 	}
+
+	// Write status and body
 	c.Status(resp.StatusCode)
 	io.Copy(c.Writer, resp.Body)
 }

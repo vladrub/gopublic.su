@@ -5,8 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"gopublic/internal/storage"
-	"gopublic/pkg/protocol"
 	"log"
 	"net"
 	"os"
@@ -14,14 +12,20 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
+
+	"gopublic/internal/config"
+	"gopublic/internal/models"
+	"gopublic/internal/storage"
+	"gopublic/pkg/protocol"
 )
 
 // Server manages the control plane for tunnel connections.
 // It handles client authentication, domain binding, and session management.
 type Server struct {
-	Registry  *TunnelRegistry
-	Port      string
-	TLSConfig *tls.Config
+	Registry   *TunnelRegistry
+	Port       string
+	TLSConfig  *tls.Config
+	RootDomain string // Root domain for FQDN generation
 
 	listener net.Listener
 	wg       sync.WaitGroup
@@ -33,15 +37,31 @@ type Server struct {
 	connSem        chan struct{}
 }
 
+// NewServerWithConfig creates a new server with the given configuration.
+func NewServerWithConfig(cfg *config.Config, registry *TunnelRegistry, tlsConfig *tls.Config) *Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Server{
+		Registry:       registry,
+		Port:           cfg.ControlPlanePort,
+		TLSConfig:      tlsConfig,
+		RootDomain:     cfg.Domain,
+		ctx:            ctx,
+		cancel:         cancel,
+		MaxConnections: cfg.MaxConnections,
+	}
+}
+
+// NewServer creates a new server (deprecated, use NewServerWithConfig).
 func NewServer(port string, registry *TunnelRegistry, tlsConfig *tls.Config) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
 		Registry:       registry,
 		Port:           port,
 		TLSConfig:      tlsConfig,
+		RootDomain:     os.Getenv("DOMAIN_NAME"), // Fallback for backward compat
 		ctx:            ctx,
 		cancel:         cancel,
-		MaxConnections: 1000, // Default limit
+		MaxConnections: 1000,
 	}
 }
 
@@ -157,117 +177,163 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 }
 
+// handleConnection processes a new client connection through the handshake protocol.
 func (s *Server) handleConnection(conn net.Conn) {
 	log.Printf("New connection from %s", conn.RemoteAddr())
-	// Wrap connection with Yamux
-	session, err := yamux.Server(conn, nil)
+
+	// 1. Setup yamux session
+	session, stream, err := s.setupYamuxSession(conn)
 	if err != nil {
-		log.Printf("Failed to create yamux session for %s: %v", conn.RemoteAddr(), err)
-		conn.Close()
+		log.Printf("Session setup failed for %s: %v", conn.RemoteAddr(), err)
 		return
 	}
-	log.Printf("Yamux session established for %s", conn.RemoteAddr())
 
-	// Accept the first stream for Handshake
-	stream, err := session.Accept()
+	// 2. Authenticate client
+	user, err := s.authenticate(stream, conn.RemoteAddr().String())
 	if err != nil {
-		log.Printf("Failed to accept handshake stream from %s: %v", conn.RemoteAddr(), err)
+		log.Printf("Authentication failed for %s: %v", conn.RemoteAddr(), err)
 		session.Close()
 		return
 	}
-	log.Printf("Handshake stream accepted from %s", conn.RemoteAddr())
 
-	// Perform Handshake
-	decoder := json.NewDecoder(stream)
-
-	// 1. Auth
-	var authReq protocol.AuthRequest
-	if err := decoder.Decode(&authReq); err != nil {
-		log.Printf("Failed to decode auth request from %s: %v", conn.RemoteAddr(), err)
-		session.Close()
-		return
-	}
-	log.Printf("Auth request received from %s", conn.RemoteAddr())
-
-	user, err := storage.ValidateToken(authReq.Token)
+	// 3. Process tunnel request and bind domains
+	boundDomains, err := s.processTunnelRequest(stream, session, user, conn.RemoteAddr().String())
 	if err != nil {
-		log.Printf("Token validation failed for %s: %v", conn.RemoteAddr(), err)
-		s.sendError(stream, "Invalid Token")
-		session.Close()
-		return
-	}
-	log.Printf("User %s authenticated (ID: %d)", user.Username, user.ID)
-
-	// 2. Tunnel Request
-	var tunnelReq protocol.TunnelRequest
-	if err := decoder.Decode(&tunnelReq); err != nil {
-		log.Printf("Failed to decode tunnel request from %s: %v", conn.RemoteAddr(), err)
-		session.Close()
-		return
-	}
-	log.Printf("Tunnel request received from %s for %d domains", conn.RemoteAddr(), len(tunnelReq.RequestedDomains))
-
-	var boundDomains []string
-	rootDomain := os.Getenv("DOMAIN_NAME")
-
-	// If no domains requested, bind ALL user domains
-	if len(tunnelReq.RequestedDomains) == 0 {
-		userDomains, err := storage.GetUserDomains(user.ID)
-		if err != nil {
-			log.Printf("Failed to get user domains for %s: %v", conn.RemoteAddr(), err)
-			s.sendError(stream, "Failed to retrieve user domains")
-			session.Close()
-			return
-		}
-		log.Printf("Client requested all domains. Found %d domains in DB for user %d", len(userDomains), user.ID)
-		for _, d := range userDomains {
-			tunnelReq.RequestedDomains = append(tunnelReq.RequestedDomains, d.Name)
-		}
-	}
-
-	for _, name := range tunnelReq.RequestedDomains {
-		log.Printf("Processing domain bind: %s (User: %d)", name, user.ID)
-		isOwner, err := storage.ValidateDomainOwnership(name, user.ID)
-		if err != nil {
-			log.Printf("Domain ownership check error for %s: %v", name, err)
-			continue
-		}
-		if isOwner {
-			// Register FQDN if rootDomain is set, otherwise just name (local dev)
-			regName := name
-			if rootDomain != "" {
-				regName = name + "." + rootDomain
-			}
-
-			s.Registry.Register(regName, session)
-			boundDomains = append(boundDomains, regName)
-			log.Printf("Successfully bound domain %s for user %d", regName, user.ID)
-		} else {
-			log.Printf("Domain ownership validation failed: %s (User: %d)", name, user.ID)
-		}
-	}
-
-	if len(boundDomains) == 0 {
-		log.Printf("No domains bound for %s. Closing session.", conn.RemoteAddr())
-		s.sendError(stream, "No valid domains requested or authorized")
+		log.Printf("Tunnel request failed for %s: %v", conn.RemoteAddr(), err)
 		session.Close()
 		return
 	}
 
-	// 3. Success Response
-	resp := protocol.InitResponse{
-		Success:      true,
-		BoundDomains: boundDomains,
-	}
-	if err := json.NewEncoder(stream).Encode(resp); err != nil {
+	// 4. Send success response
+	if err := s.sendSuccessResponse(stream, boundDomains); err != nil {
 		log.Printf("Failed to send success response to %s: %v", conn.RemoteAddr(), err)
 	}
 	log.Printf("Handshake complete for %s. Bound domains: %v", conn.RemoteAddr(), boundDomains)
 
-	// Keep session alive. Monitor for close to cleanup.
+	// 5. Monitor session for cleanup
+	s.monitorSession(session, user.ID, boundDomains)
+}
+
+// setupYamuxSession creates a yamux session and accepts the handshake stream.
+func (s *Server) setupYamuxSession(conn net.Conn) (*yamux.Session, net.Conn, error) {
+	session, err := yamux.Server(conn, nil)
+	if err != nil {
+		conn.Close()
+		return nil, nil, err
+	}
+	log.Printf("Yamux session established for %s", conn.RemoteAddr())
+
+	stream, err := session.Accept()
+	if err != nil {
+		session.Close()
+		return nil, nil, err
+	}
+	log.Printf("Handshake stream accepted from %s", conn.RemoteAddr())
+
+	return session, stream, nil
+}
+
+// authenticate validates the client's token and returns the user.
+func (s *Server) authenticate(stream net.Conn, remoteAddr string) (*models.User, error) {
+	decoder := json.NewDecoder(stream)
+
+	var authReq protocol.AuthRequest
+	if err := decoder.Decode(&authReq); err != nil {
+		return nil, err
+	}
+	log.Printf("Auth request received from %s", remoteAddr)
+
+	user, err := storage.ValidateToken(authReq.Token)
+	if err != nil {
+		s.sendError(stream, "Invalid Token")
+		return nil, err
+	}
+	log.Printf("User %s authenticated (ID: %d)", user.Username, user.ID)
+
+	return user, nil
+}
+
+// processTunnelRequest handles the tunnel request and binds domains.
+func (s *Server) processTunnelRequest(stream net.Conn, session *yamux.Session, user *models.User, remoteAddr string) ([]string, error) {
+	decoder := json.NewDecoder(stream)
+
+	var tunnelReq protocol.TunnelRequest
+	if err := decoder.Decode(&tunnelReq); err != nil {
+		return nil, err
+	}
+	log.Printf("Tunnel request received from %s for %d domains", remoteAddr, len(tunnelReq.RequestedDomains))
+
+	// If no domains requested, get all user domains
+	requestedDomains := tunnelReq.RequestedDomains
+	if len(requestedDomains) == 0 {
+		userDomains, err := storage.GetUserDomains(user.ID)
+		if err != nil {
+			s.sendError(stream, "Failed to retrieve user domains")
+			return nil, err
+		}
+		log.Printf("Client requested all domains. Found %d domains in DB for user %d", len(userDomains), user.ID)
+		for _, d := range userDomains {
+			requestedDomains = append(requestedDomains, d.Name)
+		}
+	}
+
+	// Bind domains
+	boundDomains := s.bindDomains(session, user.ID, requestedDomains)
+
+	if len(boundDomains) == 0 {
+		s.sendError(stream, "No valid domains requested or authorized")
+		return nil, errors.New("no domains bound")
+	}
+
+	return boundDomains, nil
+}
+
+// bindDomains validates ownership and registers domains with the session.
+func (s *Server) bindDomains(session *yamux.Session, userID uint, requestedDomains []string) []string {
+	var boundDomains []string
+
+	for _, name := range requestedDomains {
+		log.Printf("Processing domain bind: %s (User: %d)", name, userID)
+
+		isOwner, err := storage.ValidateDomainOwnership(name, userID)
+		if err != nil {
+			log.Printf("Domain ownership check error for %s: %v", name, err)
+			continue
+		}
+
+		if !isOwner {
+			log.Printf("Domain ownership validation failed: %s (User: %d)", name, userID)
+			continue
+		}
+
+		// Register FQDN if rootDomain is set, otherwise just name (local dev)
+		regName := name
+		if s.RootDomain != "" {
+			regName = name + "." + s.RootDomain
+		}
+
+		s.Registry.Register(regName, session)
+		boundDomains = append(boundDomains, regName)
+		log.Printf("Successfully bound domain %s for user %d", regName, userID)
+	}
+
+	return boundDomains
+}
+
+// sendSuccessResponse sends the handshake success response to the client.
+func (s *Server) sendSuccessResponse(stream net.Conn, boundDomains []string) error {
+	resp := protocol.InitResponse{
+		Success:      true,
+		BoundDomains: boundDomains,
+	}
+	return json.NewEncoder(stream).Encode(resp)
+}
+
+// monitorSession watches for session close and cleans up domain registrations.
+func (s *Server) monitorSession(session *yamux.Session, userID uint, boundDomains []string) {
 	go func() {
 		<-session.CloseChan()
-		log.Printf("Session closed for user %d. Cleaning up domains.", user.ID)
+		log.Printf("Session closed for user %d. Cleaning up domains.", userID)
 		for _, d := range boundDomains {
 			s.Registry.Unregister(d)
 		}

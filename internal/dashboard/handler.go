@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"gopublic/internal/auth"
+	"gopublic/internal/config"
 	"gopublic/internal/models"
 	"gopublic/internal/storage"
 )
@@ -31,15 +32,35 @@ type Handler struct {
 	Session  *auth.SessionManager
 }
 
+// NewHandlerWithConfig creates a new dashboard handler with the given configuration.
+func NewHandlerWithConfig(cfg *config.Config) (*Handler, error) {
+	sessionCfg := auth.SessionConfig{
+		IsSecure:          cfg.IsSecure(),
+		AllowInsecureKeys: cfg.AllowInsecureSessionKeys(),
+	}
+
+	sessionMgr, err := auth.NewSessionManager(sessionCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Handler{
+		BotToken: cfg.TelegramBotToken,
+		BotName:  cfg.TelegramBotName,
+		Domain:   cfg.Domain,
+		Session:  sessionMgr,
+	}, nil
+}
+
+// NewHandler creates a new dashboard handler using environment variables.
+// Deprecated: Use NewHandlerWithConfig instead.
 func NewHandler() (*Handler, error) {
 	domain := os.Getenv("DOMAIN_NAME")
 	isSecure := domain != "" && domain != "localhost" && domain != "127.0.0.1"
 
-	// In dev mode (insecure), allow random session keys
-	// In production (secure), require proper session keys
 	sessionCfg := auth.SessionConfig{
 		IsSecure:          isSecure,
-		AllowInsecureKeys: !isSecure, // Only allow random keys in dev mode
+		AllowInsecureKeys: !isSecure,
 	}
 
 	sessionMgr, err := auth.NewSessionManager(sessionCfg)

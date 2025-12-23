@@ -8,14 +8,16 @@ import (
 	"gorm.io/gorm"
 
 	"gopublic/internal/auth"
+	apperrors "gopublic/internal/errors"
 	"gopublic/internal/models"
 )
 
-// Common errors for storage operations
+// Common errors for storage operations.
+// These are aliases to the centralized errors package for backward compatibility.
 var (
-	ErrNotFound     = errors.New("record not found")
-	ErrDBError      = errors.New("database error")
-	ErrDuplicateKey = errors.New("duplicate key")
+	ErrNotFound     = apperrors.ErrNotFound
+	ErrDBError      = apperrors.ErrInternal
+	ErrDuplicateKey = apperrors.ErrDuplicateKey
 )
 
 // DB is the global database instance.

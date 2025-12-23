@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -19,20 +21,31 @@ type CSRFConfig struct {
 	Secure bool // Whether to set Secure flag on cookie
 }
 
-// generateCSRFToken creates a random token
+// generateCSRFToken creates a cryptographically secure random token.
+// Returns empty string if entropy is unavailable (caller must handle).
 func generateCSRFToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("CRITICAL: Failed to generate CSRF token: %v", err)
+		return ""
+	}
 	return base64.URLEncoding.EncodeToString(b)
 }
 
-// SetCSRFToken middleware generates CSRF token for GET requests
+// SetCSRFToken middleware generates CSRF token for GET requests.
 func SetCSRFToken(cfg *CSRFConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if token already exists
 		if _, err := c.Cookie(csrfCookieName); err != nil {
 			// Generate new token
 			token := generateCSRFToken()
+			if token == "" {
+				// Critical: couldn't generate secure token, abort request
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+					"error": "internal server error",
+				})
+				return
+			}
 
 			http.SetCookie(c.Writer, &http.Cookie{
 				Name:     csrfCookieName,
@@ -56,7 +69,7 @@ func SetCSRFToken(cfg *CSRFConfig) gin.HandlerFunc {
 	}
 }
 
-// ValidateCSRF middleware validates CSRF token for unsafe methods
+// ValidateCSRF middleware validates CSRF token for unsafe methods.
 func ValidateCSRF() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip safe methods
@@ -71,6 +84,7 @@ func ValidateCSRF() gin.HandlerFunc {
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "CSRF token missing",
+				"code":  "CSRF_TOKEN_MISSING",
 			})
 			return
 		}
@@ -81,16 +95,25 @@ func ValidateCSRF() gin.HandlerFunc {
 			requestToken = c.PostForm(csrfFormField)
 		}
 
-		// Validate
-		if requestToken == "" || requestToken != cookieToken {
+		// Validate using constant-time comparison to prevent timing attacks
+		if requestToken == "" || !secureCompare(requestToken, cookieToken) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "CSRF token invalid",
+				"code":  "CSRF_TOKEN_INVALID",
 			})
 			return
 		}
 
 		c.Next()
 	}
+}
+
+// secureCompare performs a constant-time string comparison.
+// This prevents timing attacks by ensuring the comparison takes
+// the same amount of time regardless of where strings differ.
+func secureCompare(a, b string) bool {
+	// subtle.ConstantTimeCompare returns 1 if equal, 0 otherwise
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // GetCSRFToken returns the current CSRF token from context
