@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - GoPublic</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f4f4f9;
+        }
+
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .token {
+            background: #eee;
+            padding: 0.5rem;
+            font-family: monospace;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .domain-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .domain-list li {
+            background: #eef;
+            margin: 0.5rem 0;
+            padding: 1rem;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .logout {
+            float: right;
+            color: red;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <a href="/logout" class="logout">Logout</a>
+        <h1>Welcome, {{.User.FirstName}}</h1>
+
+        <h3>Your Auth Token</h3>
+        <div class="token">{{.Token}}</div>
+        <p><small>Run <code>./gopublic auth {{.Token}}</code> to configure your client.</small></p>
+    </div>
+
+    <div class="card">
+        <h3>Your Domains</h3>
+        <ul class="domain-list">
+            {{range .Domains}}
+            <li>
+                <strong>{{.Name}}</strong>
+                <span><a href="https://{{.Name}}.{{$.RootDomain}}" target="_blank">Open</a></span>
+            </li>
+            {{end}}
+        </ul>
+    </div>
+</body>
+
+</html>

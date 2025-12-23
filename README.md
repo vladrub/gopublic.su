@@ -11,6 +11,8 @@ For a deep dive into how the system works, see [ARCHITECTURE.md](ARCHITECTURE.md
 |----------|-------------|---------|
 | `DOMAIN_NAME` | The root domain for your server (e.g. `example.com`). If set, enables **HTTPS** mode. | *empty* (HTTP mode) |
 | `EMAIL` | Email address for Let's Encrypt registration (required if `DOMAIN_NAME` is set). | *empty* |
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather for Telegram Login. | *empty* |
+| `TELEGRAM_BOT_NAME` | Username of your bot (e.g. `MyGopublicBot`) used in the login widget. | *empty* |
 
 **Example `.env` file:**
 ```ini
@@ -61,13 +63,12 @@ The recommended way to deploy the server is using Docker.
 ### 2. Deployment Steps
 
 1. **Clone/Copy Project**: Copy the project files to your VPS.
-2. **Configure Domain**:
-   Open `docker-compose.yml` and add your domain and email under `environment`:
+2. **Create .env file**:
+   Create a `.env` file in the same directory:
 
-```yaml
-    environment:
-      - DOMAIN_NAME=example.com # Your root domain
-      - EMAIL=your-email@example.com # For Let's Encrypt
+```ini
+DOMAIN_NAME=example.com
+EMAIL=your-email@example.com
 ```
 
 3. **Build and Run**:

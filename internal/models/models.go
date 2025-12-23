@@ -6,7 +6,12 @@ import (
 
 type User struct {
 	gorm.Model
-	Email string `gorm:"uniqueIndex"`
+	Email      string
+	TelegramID int64 `gorm:"uniqueIndex"`
+	FirstName  string
+	LastName   string
+	Username   string
+	PhotoURL   string
 }
 
 type Token struct {

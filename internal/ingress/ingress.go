@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"bufio"
+	"gopublic/internal/dashboard"
 	"gopublic/internal/server"
 	"io"
 	"log"
@@ -13,14 +14,16 @@ import (
 )
 
 type Ingress struct {
-	Registry *server.TunnelRegistry
-	Port     string
+	Registry    *server.TunnelRegistry
+	DashHandler *dashboard.Handler
+	Port        string
 }
 
-func NewIngress(port string, registry *server.TunnelRegistry) *Ingress {
+func NewIngress(port string, registry *server.TunnelRegistry, dash *dashboard.Handler) *Ingress {
 	return &Ingress{
-		Registry: registry,
-		Port:     port,
+		Registry:    registry,
+		DashHandler: dash,
+		Port:        port,
 	}
 }
 
@@ -30,7 +33,63 @@ func (i *Ingress) Handler() http.Handler {
 
 	r := gin.Default()
 
-	// Catch-all handler
+	// Register Dashboard Routes (will be handled via Host matching in middleware or here)
+	// Actually, `dashboard.Handler.RegisterRoutes` registers routes on `r`.
+	// But `r` catches everything.
+	// We need to route based on Host.
+	// Strategy:
+	// 1. Register Dashboard routes on a sub-group or let DashHandler register what it needs.
+	//    BUT checking `handleRequest` (the catch-all) logic in previous steps shows it handles "app.domain".
+	//    The logic in `handleRequest` does: `if host == "app."+domain { ... }`
+	//    We should delegate that to `i.DashHandler`.
+
+	// Let's modify handleRequest to call DashHandler if host matches.
+	// BUT `DashHandler` is designed as a set of Gin Routes (GET /login, GET /).
+	// We can't easily jump from a catch-all handler into defined Gin routes unless we register them.
+
+	// Better Strategy:
+	// Register Dashboard routes for SPECIFIC HOST explicitly? Gin doesn't support Host routing easily without middleware.
+
+	// Alternate Strategy (Simplest for now):
+	// Register Dashboard handlers directly in the main Engine, but use a middleware to enforce Host "app.domain".
+	// Or, just use the `handleRequest` to start the dashboard engine? No.
+
+	// Let's stick to the current plan:
+	// `handleRequest` is the NoRoute handler.
+	// If `handleRequest` detects `app.domain`, it needs to serve the dashboard.
+	// Since we already have the `DashHandler` which registers routes like `/`, `/login`.
+	// If we register those routes on `r`, they will conflict with tunnel routing if we are not careful (tunnel uses subdomains).
+	// But `/login` on a tunnel domain `foo.example.com` should just be proxied.
+
+	// Solution:
+	// Use Middleware to check Host.
+	// IF host == app.domain -> Continue to Gin Routes.
+	// IF host != app.domain -> Abort Gin Routes and go to Tunnel logic (which is likely the NoRoute handler?)
+
+	// Let's register Dashboard routes normally.
+	// And add a Middleware at the top that says:
+	// "If Host != app.domain, Skip/Next" -> But Gin matches path first.
+
+	// OK, looking at `dashboard/handler.go`, it does `r.GET("/", ...)`.
+	// If I register that, then `http://tunnel.com/` will hit the dashboard handler if I'm not careful.
+	// I need a middleware that says: "If this route is matched, ensure Host is app.domain".
+
+	// Let's do this:
+	// Pass `r` to `i.DashHandler.RegisterRoutes(r)`.
+	// But inside `RegisterRoutes`, wraps handlers with `RequireDashboardDomain`.
+
+	// Or simply:
+	// In `handleRequest` (which captures 404s/unknowns), we handle Tunnels.
+	// For Dashboard, we explicitly register routes.
+	// But we need to ensure those routes ONLY match `app.domain`.
+
+	// Load Templates (delegated to Dashboard handler helper)
+	// We need to ensure Gin engine has templates loaded so c.HTML works in manual dispatch.
+	if err := i.DashHandler.LoadTemplates(r); err != nil {
+		log.Printf("Failed to load templates: %v", err)
+	}
+
+	// Catch-all handler for Tunnels (and Landing Page)
 	r.NoRoute(i.handleRequest)
 	return r
 }
@@ -56,9 +115,45 @@ func (i *Ingress) handleRequest(c *gin.Context) {
 	}
 
 	// 2. Dashboard
+	// Handled by Registered Routes in i.DashHandler AND Middleware (to be added)
+	// OR: if we rely on route registration, we can't easily rely on NoRoute for tunnels without conflicts.
+	// FIX: Use a Host-based middleware for the entire engine.
+
+	// Temporarily: If DashHandler didn't register routes, we'd do it here.
+	// But since we registered them, we need to ensure they DON'T match tunnel domains.
+	// The best way in Gin is `r.Group("/")` with middleware that checks `Host == app.domain`.
+	// If check fails, `c.Next()`? No, if route matches, it runs.
+	// If check fails, we want to fall through to NoRoute? Gin doesn't support "fall through to NoRoute" easily from a matched route.
+
+	// ALTERNATIVE: Don't register routes on the main engine.
+	// Instead, have `handleRequest` (NoRoute) delegate to `DashHandler` if host matches.
+	// This is SAFER and EASIER for this architecture (Tunnels are dynamic wildcard).
+
 	if rootDomain != "" && host == "app."+rootDomain {
-		c.Header("Content-Type", "text/html")
-		c.String(http.StatusOK, "<h1>GoPublic Dashboard</h1><p>Login with Google (Coming Soon)</p>")
+		// Delegate to Dashboard Engine/Handler
+		// We can Create a separate Gin engine for Dashboard or just pass Context to DashHandler's methods manuall??
+		// `DashHandler.RegisterRoutes` registers on an Engine.
+		// Let's go back and CHANGE `ingress.Handler` to NOT register routes globally, but use a side-engine or similar.
+		// OR: just match path manually here.
+
+		// "Manual Routing" inside this block:
+		if c.Request.URL.Path == "/login" {
+			i.DashHandler.Login(c)
+			return
+		}
+		if c.Request.URL.Path == "/" {
+			i.DashHandler.Index(c)
+			return
+		}
+		if c.Request.URL.Path == "/auth/telegram" {
+			i.DashHandler.TelegramCallback(c)
+			return
+		}
+		if c.Request.URL.Path == "/logout" {
+			i.DashHandler.Logout(c)
+			return
+		}
+		c.String(http.StatusNotFound, "Not Found")
 		return
 	}
 

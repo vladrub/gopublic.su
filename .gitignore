@@ -1,7 +1,7 @@
 # Binaries
 bin/
-server
-client
+/server
+/client
 gopublic-server
 gopublic-client
 
