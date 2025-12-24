@@ -187,11 +187,11 @@ jobs:
           script: |
             cd ~/gopublic
 
-            # Pull the latest image
-            docker compose pull
+            # Pull the latest image (force, ignore cache)
+            docker compose pull --ignore-pull-failures
 
-            # Restart the server with the new image
-            docker compose up -d
+            # Force recreate containers with new image
+            docker compose up -d --force-recreate --pull always
 
             # Clean up old images
             docker image prune -f
