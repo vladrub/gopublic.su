@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopublic/internal/version"
+
 	"github.com/spf13/cobra"
 )
 
@@ -167,7 +169,7 @@ func TestShouldUseTUI_NonTTY(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
-	if Version == "" {
+	if version.Version == "" {
 		t.Error("Version should have a default value")
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"gopublic/internal/dashboard"
 	"gopublic/internal/middleware"
 	"gopublic/internal/server"
+	"gopublic/internal/version"
 )
 
 // hostPattern validates hostnames (RFC 1123 compliant + localhost).
@@ -225,6 +226,8 @@ func (i *Ingress) serveLandingPage(c *gin.Context) {
 			"ProjectName":  i.ProjectName,
 			"RootDomain":   i.RootDomain,
 			"DashboardURL": scheme + "://app." + i.RootDomain,
+			"GitHubRepo":   i.GitHubRepo,
+			"Version":      version.Version,
 		})
 	}
 }

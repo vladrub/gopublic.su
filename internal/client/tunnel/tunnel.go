@@ -137,10 +137,13 @@ func (t *Tunnel) Start() error {
 
 	connectStart := time.Now()
 
+	// Dial timeout for initial connection
+	dialTimeout := 10 * time.Second
+
 	if isLocal {
 		t.publishStatus("dialing", fmt.Sprintf("Connecting to %s (plain TCP)...", t.ServerAddr))
 		log.Printf("Local server detected on %s, using plain TCP", t.ServerAddr)
-		conn, err := net.Dial("tcp", t.ServerAddr)
+		conn, err := net.DialTimeout("tcp", t.ServerAddr, dialTimeout)
 		if err != nil {
 			t.publishStatus("error", fmt.Sprintf("Connection failed: %v", err))
 			t.publishEvent(events.EventError, events.ErrorData{Error: err, Context: "connect"})
@@ -162,11 +165,12 @@ func (t *Tunnel) Start() error {
 	}
 
 	t.publishStatus("dialing", fmt.Sprintf("Connecting to %s (TLS)...", t.ServerAddr))
-	conn, err := tls.Dial("tcp", t.ServerAddr, tlsConfig)
+	dialer := &net.Dialer{Timeout: dialTimeout}
+	conn, err := tls.DialWithDialer(dialer, "tcp", t.ServerAddr, tlsConfig)
 	if err != nil {
 		t.publishStatus("tls_fallback", fmt.Sprintf("TLS failed: %v, trying plain TCP...", err))
 		log.Printf("TLS connection failed, trying plain TCP: %v", err)
-		connPlain, errPlain := net.Dial("tcp", t.ServerAddr)
+		connPlain, errPlain := net.DialTimeout("tcp", t.ServerAddr, dialTimeout)
 		if errPlain != nil {
 			t.publishStatus("error", fmt.Sprintf("Connection failed: %v", errPlain))
 			t.publishEvent(events.EventError, events.ErrorData{Error: errPlain, Context: "connect"})
@@ -217,6 +221,10 @@ func (t *Tunnel) handleSession(conn net.Conn, connectStart time.Time) error {
 		return fmt.Errorf("failed to open handshake stream: %v", err)
 	}
 
+	// Set write deadline for handshake operations
+	handshakeTimeout := 15 * time.Second
+	stream.SetWriteDeadline(time.Now().Add(handshakeTimeout))
+
 	// Auth
 	t.publishStatus("authenticating", "Authenticating with server...")
 	authReq := protocol.AuthRequest{Token: t.Token, Force: t.Force}
@@ -236,14 +244,19 @@ func (t *Tunnel) handleSession(conn net.Conn, connectStart time.Time) error {
 		t.publishStatus("error", fmt.Sprintf("Failed to request tunnel: %v", err))
 		return err
 	}
+	// Clear write deadline
+	stream.SetWriteDeadline(time.Time{})
 
-	// Read Response
+	// Read Response with timeout to prevent hanging
 	t.publishStatus("waiting_response", "Waiting for server response...")
+	stream.SetReadDeadline(time.Now().Add(handshakeTimeout))
 	var resp protocol.InitResponse
 	if err := json.NewDecoder(stream).Decode(&resp); err != nil {
 		t.publishStatus("error", fmt.Sprintf("Failed to read response: %v", err))
 		return fmt.Errorf("handshake read failed: %v", err)
 	}
+	// Clear deadline for normal operation
+	stream.SetReadDeadline(time.Time{})
 
 	if !resp.Success {
 		// Check for specific error code

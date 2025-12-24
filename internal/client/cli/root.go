@@ -14,6 +14,7 @@ import (
 	"gopublic/internal/client/stats"
 	"gopublic/internal/client/tui"
 	"gopublic/internal/client/tunnel"
+	"gopublic/internal/version"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -28,16 +29,13 @@ var rootCmd = &cobra.Command{
 // ServerAddr should be injected via ldflags. Default for dev.
 var ServerAddr = "localhost:4443"
 
-// Version can be set at build time
-var Version = "dev"
-
 func Init(serverAddr string) {
 	if serverAddr != "" {
 		ServerAddr = serverAddr
 	}
 
 	// Set version for TUI
-	tui.Version = Version
+	tui.Version = version.Version
 
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(startCmd)
