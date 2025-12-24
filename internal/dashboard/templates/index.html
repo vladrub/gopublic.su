@@ -838,7 +838,9 @@ tunnels:
     <script>
         function getCsrfToken() {
             const match = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
-            return match ? match.split('=')[1] : '';
+            if (!match) return '';
+            // Use substring to handle base64 tokens that may contain '=' padding
+            return match.substring('csrf_token='.length);
         }
 
         function copyCode(elementId, btn) {
