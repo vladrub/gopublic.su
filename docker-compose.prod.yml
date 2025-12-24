@@ -1,0 +1,28 @@
+version: '3.8'
+
+# Production docker-compose for VPS deployment
+# Uses pre-built image from GitHub Container Registry
+#
+# Setup:
+#   1. Copy this file to your VPS: ~/gopublic/docker-compose.yml
+#   2. Create .env file with required variables (see docs/DEPLOYMENT.md)
+#   3. Replace IMAGE_NAME below with your actual image path
+#   4. Run: docker compose up -d
+
+services:
+  server:
+    # Replace with your actual GitHub Container Registry path
+    # Format: ghcr.io/username/repository:tag
+    image: ${IMAGE_NAME:-ghcr.io/owner/gopublic:latest}
+    container_name: gopublic-server
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "4443:4443" # Control Plane (client connections)
+      - "80:80"     # HTTP / ACME challenges
+      - "443:443"   # HTTPS ingress
+    volumes:
+      - ./data:/app/data # SQLite database persistence
+    working_dir: /app/data
+    entrypoint: ["/app/server"]
