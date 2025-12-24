@@ -222,7 +222,7 @@ func (t *Tunnel) handleSession(conn net.Conn, connectStart time.Time) error {
 	}
 
 	// Set write deadline for handshake operations
-	handshakeTimeout := 15 * time.Second
+	handshakeTimeout := 5 * time.Second
 	stream.SetWriteDeadline(time.Now().Add(handshakeTimeout))
 
 	// Auth

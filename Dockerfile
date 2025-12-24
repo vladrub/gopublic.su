@@ -13,9 +13,13 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Get version from git tag or commit
+ARG VERSION=dev
+ENV VERSION=${VERSION}
+
 # Build the binary
 # CGO_ENABLED=1 is required for go-sqlite3
-RUN CGO_ENABLED=1 GOOS=linux go build -o server cmd/server/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags "-X gopublic/internal/version.Version=${VERSION}" -o server cmd/server/main.go
 
 # Runtime Stage
 FROM alpine:latest

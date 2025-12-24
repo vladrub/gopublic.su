@@ -241,7 +241,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 }
 
 // Handshake timeout for server-side operations
-const handshakeTimeout = 30 * time.Second
+const handshakeTimeout = 10 * time.Second
 
 // setupYamuxSession creates a yamux session and accepts the handshake stream.
 func (s *Server) setupYamuxSession(conn net.Conn) (*yamux.Session, net.Conn, error) {
