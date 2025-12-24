@@ -508,17 +508,25 @@
                     <button class="copy-btn" id="copy-btn" onclick="copyToken()">Копировать</button>
                 </div>
                 <p class="token-instructions">
-                    Настройте клиент: <code>./gopublic auth ВАШ_ТОКЕН</code>
+                    Настройте клиент: <code>gopublic auth ВАШ_ТОКЕН</code>
                 </p>
             </div>
         </section>
 
-        {{if .GitHubRepo}}
         <section class="card">
             <div class="card-header">
-                <div class="card-label">Скачать клиент</div>
+                <div class="card-label">Установка клиента</div>
             </div>
             <div class="card-body">
+                <p class="config-description">Быстрая установка одной командой:</p>
+                <pre class="config-example"><code># macOS / Linux
+curl -sSL https://{{.RootDomain}}/install.sh | sh
+sudo mv gopublic /usr/local/bin/
+
+# Windows (PowerShell)
+iwr -useb https://{{.RootDomain}}/install.ps1 | iex</code></pre>
+                {{if .GitHubRepo}}
+                <p class="config-description" style="margin-top: 1.5rem;">Или скачайте напрямую:</p>
                 <div class="download-grid">
                     <a href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-macos-arm64" class="download-btn">
                         <span class="download-icon">🍎</span>
@@ -537,10 +545,9 @@
                         <span class="download-label">Windows x64</span>
                     </a>
                 </div>
-                <p class="download-note">После скачивания: <code>chmod +x gopublic-*</code> (для macOS/Linux)</p>
+                {{end}}
             </div>
         </section>
-        {{end}}
 
         <section class="card">
             <div class="card-header">
@@ -563,6 +570,7 @@
             </div>
         </section>
 
+        {{if .Domains}}
         <section class="card">
             <div class="card-header">
                 <div class="card-label">Конфигурация проекта</div>
@@ -573,19 +581,17 @@
                 </p>
                 <pre class="config-example"><code>version: "1"
 tunnels:
-  web:
+{{- range $i, $d := .Domains}}{{if lt $i 2}}
+  {{if eq $i 0}}web{{else}}api{{end}}:
     proto: http
-    addr: "3000"
-    subdomain: my-app
-  api:
-    proto: http
-    addr: "8080"
-    subdomain: my-api</code></pre>
+    addr: "{{if eq $i 0}}3000{{else}}8080{{end}}"
+    subdomain: {{$d.Name}}{{end}}{{end}}</code></pre>
                 <p class="config-instructions">
                     Затем запустите: <code>gopublic start</code>
                 </p>
             </div>
         </section>
+        {{end}}
     </main>
 
     <footer class="footer">
