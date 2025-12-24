@@ -306,6 +306,32 @@
             color: white;
         }
 
+        /* Install */
+        .install-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .install-block {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .install-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .copy-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
         /* Empty state */
         .empty-state {
             text-align: center;
@@ -500,31 +526,30 @@
     <main class="main">
         <section class="card">
             <div class="card-header">
-                <div class="card-label">Токен авторизации</div>
-            </div>
-            <div class="card-body">
-                <div class="token-display">
-                    <div class="token-value" id="token">gopublic auth {{.Token}}</div>
-                    <button class="copy-btn" id="copy-btn" onclick="copyToken()">Копировать</button>
-                </div>
-                <p class="token-instructions">
-                    Выполните эту команду для авторизации клиента
-                </p>
-            </div>
-        </section>
-
-        <section class="card">
-            <div class="card-header">
                 <div class="card-label">Установка клиента</div>
             </div>
             <div class="card-body">
                 <p class="config-description">Быстрая установка одной командой:</p>
-                <pre class="config-example"><code># macOS / Linux
-curl -sSL https://{{.RootDomain}}/install.sh | sh
-sudo mv gopublic /usr/local/bin/
 
-# Windows (PowerShell)
-iwr -useb https://{{.RootDomain}}/install.ps1 | iex</code></pre>
+                <div class="install-grid">
+                    <div class="install-block">
+                        <div class="install-title">macOS / Linux</div>
+                        <pre class="config-example" id="install-unix"><code>curl -sSL https://{{.RootDomain}}/install.sh | sh
+sudo mv gopublic /usr/local/bin/</code></pre>
+                        <div class="copy-row">
+                            <button class="copy-btn" id="copy-install-unix" onclick="copyTextFrom('install-unix', 'copy-install-unix')">Копировать команды</button>
+                        </div>
+                    </div>
+
+                    <div class="install-block">
+                        <div class="install-title">Windows (PowerShell)</div>
+                        <pre class="config-example" id="install-win"><code>iwr -useb https://{{.RootDomain}}/install.ps1 | iex</code></pre>
+                        <div class="copy-row">
+                            <button class="copy-btn" id="copy-install-win" onclick="copyTextFrom('install-win', 'copy-install-win')">Копировать команду</button>
+                        </div>
+                    </div>
+                </div>
+
                 {{if .GitHubRepo}}
                 <p class="config-description" style="margin-top: 1.5rem;">Или скачайте напрямую:</p>
                 <div class="download-grid">
@@ -546,6 +571,21 @@ iwr -useb https://{{.RootDomain}}/install.ps1 | iex</code></pre>
                     </a>
                 </div>
                 {{end}}
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div class="card-label">Токен авторизации</div>
+            </div>
+            <div class="card-body">
+                <div class="token-display">
+                    <div class="token-value" id="token">gopublic auth {{.Token}}</div>
+                    <button class="copy-btn" id="copy-btn" onclick="copyToken()">Копировать</button>
+                </div>
+                <p class="token-instructions">
+                    Выполните эту команду для авторизации клиента
+                </p>
             </div>
         </section>
 
@@ -586,9 +626,14 @@ tunnels:
     proto: http
     addr: "{{add 3000 $i}}"
     subdomain: {{$d.Name}}{{end}}</code></pre>
-                <p class="config-instructions">
-                    Затем запустите: <code>gopublic start</code>
-                </p>
+                <div class="config-instructions" style="display: grid; gap: 0.5rem;">
+                    <p>Запуск клиента:</p>
+                    <ul style="margin-left: 1rem; display: grid; gap: 0.4rem;">
+                        <li>Базовый режим: <code>gopublic start</code> — читает <code>gopublic.yaml</code> из текущей директории и поднимает все туннели по конфигу.</li>
+                        <li>Точка на один порт: <code>gopublic start --port 8080</code> — без файла конфигурации, поднимает реверс-прокси только для указанного локального порта.</li>
+                    </ul>
+                    <p>Запускать лучше из корня проекта, где лежит конфиг.</p>
+                </div>
             </div>
         </section>
         {{end}}
@@ -599,35 +644,40 @@ tunnels:
     </footer>
 
     <script>
-        function copyToken() {
-            const token = document.getElementById('token').textContent;
-            const btn = document.getElementById('copy-btn');
-
-            navigator.clipboard.writeText(token).then(() => {
+        function copyWithFeedback(text, btn) {
+            const doFeedback = () => {
                 btn.textContent = 'Скопировано';
                 btn.classList.add('copied');
-
                 setTimeout(() => {
                     btn.textContent = 'Копировать';
                     btn.classList.remove('copied');
                 }, 2000);
-            }).catch(() => {
-                // Fallback for older browsers
+            };
+
+            if (!navigator.clipboard) {
                 const textarea = document.createElement('textarea');
-                textarea.value = token;
+                textarea.value = text;
                 document.body.appendChild(textarea);
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
+                doFeedback();
+                return;
+            }
 
-                btn.textContent = 'Скопировано';
-                btn.classList.add('copied');
+            navigator.clipboard.writeText(text).then(doFeedback);
+        }
 
-                setTimeout(() => {
-                    btn.textContent = 'Копировать';
-                    btn.classList.remove('copied');
-                }, 2000);
-            });
+        function copyTextFrom(elementId, buttonId) {
+            const el = document.getElementById(elementId);
+            const btn = document.getElementById(buttonId);
+            if (!el || !btn) return;
+            const text = el.textContent.trim();
+            copyWithFeedback(text, btn);
+        }
+
+        function copyToken() {
+            copyTextFrom('token', 'copy-btn');
         }
     </script>
 </body>
