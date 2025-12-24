@@ -26,6 +26,7 @@ type Ingress struct {
 	DashHandler *dashboard.Handler
 	Port        string
 	RootDomain  string // Root domain for routing
+	ProjectName string // Project name for branding
 	IsSecure    bool   // Whether running in secure mode
 }
 
@@ -36,17 +37,23 @@ func NewIngressWithConfig(cfg *config.Config, registry *server.TunnelRegistry, d
 		DashHandler: dash,
 		Port:        cfg.IngressPort(),
 		RootDomain:  cfg.Domain,
+		ProjectName: cfg.ProjectName,
 		IsSecure:    cfg.IsSecure(),
 	}
 }
 
 // NewIngress creates a new ingress (deprecated, use NewIngressWithConfig).
 func NewIngress(port string, registry *server.TunnelRegistry, dash *dashboard.Handler) *Ingress {
+	projectName := os.Getenv("PROJECT_NAME")
+	if projectName == "" {
+		projectName = "Go Public"
+	}
 	return &Ingress{
 		Registry:    registry,
 		DashHandler: dash,
 		Port:        port,
 		RootDomain:  os.Getenv("DOMAIN_NAME"),
+		ProjectName: projectName,
 		IsSecure:    false,
 	}
 }
@@ -206,10 +213,10 @@ func (i *Ingress) serveLandingPage(c *gin.Context) {
 	if i.IsSecure {
 		scheme = "https"
 	}
-	c.Header("Content-Type", "text/html")
-	c.String(http.StatusOK, `<h1>Welcome to GoPublic</h1>
-<p>Fast, simple, secure tunnels.</p>
-<a href='`+scheme+`://app.`+i.RootDomain+`'>Go to Dashboard</a>`)
+	c.HTML(http.StatusOK, "landing.html", gin.H{
+		"ProjectName":  i.ProjectName,
+		"DashboardURL": scheme + "://app." + i.RootDomain,
+	})
 }
 
 // serveDashboard routes requests to dashboard handlers.

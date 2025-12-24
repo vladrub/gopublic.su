@@ -11,6 +11,7 @@ import (
 type Config struct {
 	// Server settings
 	Domain       string // Root domain (e.g., "example.com")
+	ProjectName  string // Project name for branding (default: "Go Public")
 	Email        string // Email for Let's Encrypt
 	InsecureMode bool   // If true, use HTTP instead of HTTPS
 	DBPath       string // Path to SQLite database
@@ -39,6 +40,7 @@ var (
 func LoadFromEnv() (*Config, error) {
 	cfg := &Config{
 		Domain:           os.Getenv("DOMAIN_NAME"),
+		ProjectName:      getEnvOrDefault("PROJECT_NAME", "Go Public"),
 		Email:            os.Getenv("EMAIL"),
 		InsecureMode:     os.Getenv("INSECURE_HTTP") == "true",
 		DBPath:           getEnvOrDefault("DB_PATH", "gopublic.db"),

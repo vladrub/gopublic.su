@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.ProjectName}} — Secure Tunnel Services</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --lumon-teal: #0d7377;
+            --lumon-teal-light: #14919b;
+            --lumon-mint: #a8dadc;
+            --lumon-mint-pale: #d4ecec;
+            --bg-cream: #f5f5dc;
+            --bg-paper: #faf9f6;
+            --bg-card: #ffffff;
+            --text-primary: #1a1a2e;
+            --text-secondary: #4a4a5a;
+            --text-muted: #7a7a8a;
+            --border-light: #d1d5db;
+            --shadow-soft: 0 2px 8px rgba(13, 115, 119, 0.08);
+            --shadow-card: 0 8px 32px rgba(26, 26, 46, 0.08);
+            --shadow-elevated: 0 16px 48px rgba(26, 26, 46, 0.12);
+            --font-primary: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-primary);
+            background-color: var(--bg-cream);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        /* Decorative grid pattern - Lumon floor aesthetic */
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            opacity: 0.03;
+            background-image:
+                linear-gradient(var(--lumon-teal) 1px, transparent 1px),
+                linear-gradient(90deg, var(--lumon-teal) 1px, transparent 1px);
+            background-size: 80px 80px;
+            z-index: 0;
+        }
+
+        /* Main content */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .landing-container {
+            max-width: 560px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3rem;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Brand Section */
+        .brand {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .brand-icon-container {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .brand-icon {
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(135deg, var(--lumon-teal), var(--lumon-teal-light));
+            border-radius: 2px;
+            transform: rotate(45deg);
+            position: relative;
+            z-index: 2;
+        }
+
+        .brand-icon-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--lumon-mint);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.6;
+        }
+
+        .brand-icon-ring::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 28px;
+            height: 28px;
+            border: 1px solid var(--lumon-mint);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.4;
+        }
+
+        .brand-name {
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            color: var(--lumon-teal);
+            line-height: 1.1;
+        }
+
+        .brand-tagline {
+            font-size: 0.75rem;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        /* Hero Card */
+        .hero-card {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            box-shadow: var(--shadow-card);
+            padding: 3rem 2.5rem;
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--lumon-teal), var(--lumon-teal-light));
+            border-radius: 0 0 4px 0;
+        }
+
+        .hero-description {
+            font-size: 1rem;
+            font-weight: 400;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            margin-bottom: 2.5rem;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-description strong {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Decorative divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .divider-line {
+            width: 48px;
+            height: 1px;
+            background: var(--border-light);
+        }
+
+        .divider-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--lumon-mint);
+            border-radius: 50%;
+        }
+
+        /* CTA Button */
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: var(--lumon-teal);
+            color: white;
+            font-family: var(--font-primary);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            text-decoration: none;
+            padding: 1rem 2rem;
+            border-radius: 4px;
+            transition: all 0.25s ease;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .cta-button:hover {
+            background: var(--lumon-teal-light);
+            box-shadow: var(--shadow-elevated);
+            transform: translateY(-2px);
+        }
+
+        .cta-button:active {
+            transform: translateY(0);
+        }
+
+        .cta-arrow {
+            font-size: 1.125rem;
+            transition: transform 0.25s ease;
+        }
+
+        .cta-button:hover .cta-arrow {
+            transform: translateX(4px);
+        }
+
+        /* Footer */
+        footer {
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .footer-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .footer-text {
+            font-family: var(--font-mono);
+            font-size: 0.6875rem;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .footer-separator {
+            width: 20px;
+            height: 1px;
+            background: var(--border-light);
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            main {
+                padding: 2rem 1.5rem;
+            }
+
+            .landing-container {
+                gap: 2.5rem;
+            }
+
+            .brand-name {
+                font-size: 1.75rem;
+                letter-spacing: 0.2em;
+            }
+
+            .hero-card {
+                padding: 2rem 1.5rem;
+            }
+
+            .hero-description {
+                font-size: 0.9375rem;
+            }
+
+            .cta-button {
+                padding: 0.875rem 1.5rem;
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Focus states */
+        :focus-visible {
+            outline: 2px solid var(--lumon-teal);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-overlay"></div>
+
+    <main>
+        <div class="landing-container">
+            <div class="brand">
+                <div class="brand-icon-container">
+                    <div class="brand-icon"></div>
+                    <div class="brand-icon-ring"></div>
+                </div>
+                <h1 class="brand-name">{{.ProjectName}}</h1>
+                <p class="brand-tagline">Secure Tunnel Services</p>
+            </div>
+
+            <div class="hero-card">
+                <div class="divider">
+                    <span class="divider-line"></span>
+                    <span class="divider-dot"></span>
+                    <span class="divider-line"></span>
+                </div>
+
+                <p class="hero-description">
+                    Expose your <strong>local services</strong> to the public internet through encrypted tunnels. Fast setup, reliable connections, complete control.
+                </p>
+
+                <a href="{{.DashboardURL}}" class="cta-button">
+                    Open Dashboard
+                    <span class="cta-arrow">→</span>
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <span class="footer-text">Tunnel Protocol</span>
+            <span class="footer-separator"></span>
+            <span class="footer-text">v1.0</span>
+        </div>
+    </footer>
+</body>
+</html>
