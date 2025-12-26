@@ -705,12 +705,19 @@ func (h *Handler) YandexCallback(c *gin.Context) {
 	}
 	defer userResp.Body.Close()
 
+	// Read raw response for debugging
+	userBody, _ := io.ReadAll(userResp.Body)
+	log.Printf("Yandex user info raw response: %s", string(userBody))
+
 	var yandexUser YandexUserInfo
-	if err := json.NewDecoder(userResp.Body).Decode(&yandexUser); err != nil {
+	if err := json.Unmarshal(userBody, &yandexUser); err != nil {
 		log.Printf("Failed to decode user info: %v", err)
 		c.String(http.StatusInternalServerError, "Failed to get user info from Yandex")
 		return
 	}
+
+	log.Printf("Yandex user parsed: ID=%s, AvatarID=%s, IsAvatarEmpty=%v, AvatarURL=%s",
+		yandexUser.ID, yandexUser.DefaultAvatarID, yandexUser.IsAvatarEmpty, yandexUser.GetAvatarURL())
 
 	// Check if user is already logged in (linking account)
 	if existingUser, err := h.getUserFromSession(c); err == nil {

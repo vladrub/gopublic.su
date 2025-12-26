@@ -1003,13 +1003,11 @@
                     </div>
                 </div>
                 <div class="user-badge">
+                    {{if .User.PhotoURL}}
                     <div class="user-avatar">
-                        {{if .User.PhotoURL}}
-                            <img src="{{.User.PhotoURL}}" alt="{{.User.FirstName}}">
-                        {{else}}
-                            {{if .User.FirstName}}{{slice .User.FirstName 0 1}}{{end}}
-                        {{end}}
+                        <img src="{{.User.PhotoURL}}" alt="{{.User.FirstName}}">
                     </div>
+                    {{end}}
                     <span>{{.User.FirstName}}{{if .User.LastName}} {{.User.LastName}}{{end}}</span>
                 </div>
                 <a href="/logout" class="logout-link">Выйти</a>

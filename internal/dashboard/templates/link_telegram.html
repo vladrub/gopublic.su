@@ -243,13 +243,11 @@
             </div>
 
             <div class="user-info">
+                {{if .User.PhotoURL}}
                 <div class="user-avatar">
-                    {{if .User.PhotoURL}}
-                        <img src="{{.User.PhotoURL}}" alt="{{.User.FirstName}}">
-                    {{else}}
-                        {{if .User.FirstName}}{{slice .User.FirstName 0 1}}{{else}}?{{end}}
-                    {{end}}
+                    <img src="{{.User.PhotoURL}}" alt="{{.User.FirstName}}">
                 </div>
+                {{end}}
                 <div class="user-details">
                     <div class="user-name">{{.User.FirstName}} {{.User.LastName}}</div>
                     {{if .User.Email}}<div class="user-email">{{.User.Email}}</div>{{end}}
