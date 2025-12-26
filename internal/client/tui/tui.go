@@ -235,6 +235,8 @@ func (m Model) handleEvent(event events.Event) Model {
 		m.status = "online"
 		m.connectionStage = ""
 		m.connectionMessage = ""
+		// Clear connection-related logs (e.g., "Connecting to...")
+		m.logs = nil
 		if data, ok := event.Data.(events.ConnectedData); ok {
 			m.serverAddr = data.ServerAddr
 			m.serverLatency = data.Latency
