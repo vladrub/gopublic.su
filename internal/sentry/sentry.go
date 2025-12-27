@@ -13,7 +13,8 @@ import (
 // ignoredErrors contains error messages that should be logged but not sent to Sentry.
 // These are typically caused by bots/scanners and create noise.
 var ignoredErrors = []string{
-	"acme/autocert: missing server name", // TLS connections without SNI (bots scanning port 4443)
+	"acme/autocert: missing server name",            // TLS connections without SNI (bots scanning port 4443)
+	"first record does not look like a TLS handshake", // Plain TCP connections to TLS port (bots/scanners)
 }
 
 // shouldIgnore checks if an error should be filtered out from Sentry.
