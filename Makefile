@@ -10,7 +10,7 @@ build-server:
 # Build client with baked-in server address
 build-client:
 	@echo "Building client for Server: $(SERVER_ADDR)"
-	go build -ldflags "-X main.ServerAddr=$(SERVER_ADDR)" -o bin/gopublic-client cmd/client/main.go
+	go build -ldflags "-X main.ServerAddr=$(SERVER_ADDR) -X gopublic/internal/version.Version=$(VERSION)" -o bin/gopublic-client cmd/client/main.go
 
 clean:
 	rm -rf bin/
