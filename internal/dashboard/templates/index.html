@@ -1081,12 +1081,17 @@ tunnels:
                     </button>
                 </div>
                 <div class="config-instructions" style="display: grid; gap: 0.5rem;">
-                    <p>Запуск клиента:</p>
+                    <p><strong>Параметры туннеля:</strong></p>
                     <ul style="margin-left: 1rem; display: grid; gap: 0.4rem;">
-                        <li>Базовый режим: <code>gopublic start</code> — читает <code>gopublic.yaml</code> из текущей директории и поднимает все туннели по конфигу.</li>
-                        <li>Точка на один порт: <code>gopublic start --port 8080</code> — без файла конфигурации, поднимает реверс-прокси только для указанного локального порта.</li>
+                        <li><code>proto</code> — протокол: <code>http</code>, <code>https</code> или <code>tcp</code></li>
+                        <li><code>addr</code> — локальный порт (<code>"3000"</code>) или адрес (<code>"localhost:3000"</code>)</li>
+                        <li><code>subdomain</code> — поддомен для привязки на сервере</li>
                     </ul>
-                    <p>Запускать лучше из корня проекта, где лежит конфиг.</p>
+                    <p style="margin-top: 0.5rem;"><strong>Запуск клиента:</strong></p>
+                    <ul style="margin-left: 1rem; display: grid; gap: 0.4rem;">
+                        <li><code>gopublic start</code> — читает <code>gopublic.yaml</code> и поднимает все туннели</li>
+                        <li><code>gopublic start 8080</code> — без конфига, один туннель на указанный порт</li>
+                    </ul>
                 </div>
             </div>
         </section>
