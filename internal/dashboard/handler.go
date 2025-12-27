@@ -166,19 +166,26 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	var authURL string
+	var authURL, origin, yandexTokenURL string
 	if h.Domain == "localhost" || h.Domain == "127.0.0.1" {
 		authURL = fmt.Sprintf("http://%s/auth/telegram", h.Domain)
+		origin = fmt.Sprintf("http://%s", h.Domain)
+		yandexTokenURL = fmt.Sprintf("http://%s/auth/yandex/suggest/token", h.Domain)
 	} else {
 		authURL = fmt.Sprintf("https://app.%s/auth/telegram", h.Domain)
+		origin = fmt.Sprintf("https://app.%s", h.Domain)
+		yandexTokenURL = fmt.Sprintf("https://app.%s/auth/yandex/suggest/token", h.Domain)
 	}
 
 	c.HTML(http.StatusOK, "login.html", gin.H{
-		"BotName":       h.BotName,
-		"AuthURL":       authURL,
-		"GitHubRepo":    h.GitHubRepo,
-		"Version":       version.Version,
-		"YandexEnabled": h.YandexClientID != "" && h.YandexClientSecret != "",
+		"BotName":        h.BotName,
+		"AuthURL":        authURL,
+		"GitHubRepo":     h.GitHubRepo,
+		"Version":        version.Version,
+		"YandexEnabled":  h.YandexClientID != "" && h.YandexClientSecret != "",
+		"YandexClientID": h.YandexClientID,
+		"YandexTokenURL": yandexTokenURL,
+		"Origin":         origin,
 	})
 }
 
@@ -798,6 +805,135 @@ func (h *Handler) YandexCallback(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusTemporaryRedirect, "/")
+}
+
+// YandexTokenPage serves the auxiliary page that receives the token from Yandex SDK
+func (h *Handler) YandexTokenPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "yandex_token.html", gin.H{})
+}
+
+// YandexTokenAuth handles authentication with Yandex access token from SDK
+func (h *Handler) YandexTokenAuth(c *gin.Context) {
+	var req struct {
+		AccessToken string `json:"access_token"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if req.AccessToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing access token"})
+		return
+	}
+
+	// Get user info from Yandex using the access token
+	userReq, _ := http.NewRequest("GET", "https://login.yandex.ru/info", nil)
+	userReq.Header.Set("Authorization", "OAuth "+req.AccessToken)
+
+	userResp, err := http.DefaultClient.Do(userReq)
+	if err != nil {
+		sentry.CaptureErrorWithContext(c, err, "Failed to get user info from Yandex (SDK)")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info from Yandex"})
+		return
+	}
+	defer userResp.Body.Close()
+
+	if userResp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid access token"})
+		return
+	}
+
+	userBody, _ := io.ReadAll(userResp.Body)
+	log.Printf("Yandex user info (SDK) raw response: %s", string(userBody))
+
+	var yandexUser YandexUserInfo
+	if err := json.Unmarshal(userBody, &yandexUser); err != nil {
+		sentry.CaptureErrorWithContext(c, err, "Failed to decode Yandex user info (SDK)")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse user info"})
+		return
+	}
+
+	log.Printf("Yandex user (SDK) parsed: ID=%s, AvatarID=%s, IsAvatarEmpty=%v",
+		yandexUser.ID, yandexUser.DefaultAvatarID, yandexUser.IsAvatarEmpty)
+
+	// Check if user is already logged in (linking account)
+	if existingUser, err := h.getUserFromSession(c); err == nil {
+		if err := storage.LinkYandexAccount(existingUser.ID, yandexUser.ID); err != nil {
+			sentry.CaptureErrorWithContext(c, err, "Failed to link Yandex account (SDK)")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to link Yandex account"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true})
+		return
+	}
+
+	// Try to find existing user by Yandex ID
+	user, err := storage.GetUserByYandexID(yandexUser.ID)
+
+	if err == storage.ErrNotFound {
+		// Create new user with token and domains
+		newUser := &models.User{
+			YandexID:  &yandexUser.ID,
+			Email:     yandexUser.DefaultEmail,
+			FirstName: yandexUser.FirstName,
+			LastName:  yandexUser.LastName,
+			Username:  yandexUser.Login,
+			PhotoURL:  yandexUser.GetAvatarURL(),
+		}
+
+		// Generate domain names
+		prefixes := []string{"misty", "silent", "bold", "rapid", "cool"}
+		suffixes := []string{"river", "star", "eagle", "bear", "fox"}
+		var domains []string
+		for i := 0; i < h.DomainsPerUser; i++ {
+			name := fmt.Sprintf("%s-%s-%d", prefixes[i%len(prefixes)], suffixes[i%len(suffixes)], time.Now().Unix()%1000+int64(i))
+			domains = append(domains, name)
+		}
+
+		reg := storage.UserRegistration{
+			User:    newUser,
+			Domains: domains,
+		}
+
+		createdUser, _, err := storage.CreateUserWithTokenAndDomains(reg)
+		if err != nil {
+			sentry.CaptureErrorWithContext(c, err, "Failed to create user via Yandex SDK")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user account"})
+			return
+		}
+		user = createdUser
+	} else if err != nil {
+		sentry.CaptureErrorWithContext(c, err, "Database error looking up Yandex user (SDK)")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	} else {
+		// Update existing user info
+		user.FirstName = yandexUser.FirstName
+		user.LastName = yandexUser.LastName
+		user.Username = yandexUser.Login
+		if yandexUser.DefaultEmail != "" {
+			user.Email = yandexUser.DefaultEmail
+		}
+		if avatarURL := yandexUser.GetAvatarURL(); avatarURL != "" {
+			user.PhotoURL = avatarURL
+		}
+		if err := storage.UpdateUser(user); err != nil {
+			sentry.CaptureErrorWithContext(c, err, "Failed to update Yandex user (SDK)")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+			return
+		}
+	}
+
+	// Set session
+	if err := h.Session.SetSession(c.Writer, user.ID); err != nil {
+		sentry.CaptureErrorWithContext(c, err, "Failed to set session after Yandex SDK login")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // LinkTelegram initiates Telegram account linking for logged-in user

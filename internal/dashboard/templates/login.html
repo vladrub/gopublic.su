@@ -7,6 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    {{if .YandexEnabled}}
+    <script src="https://yastatic.net/s3/passport-sdk/autofill/v1/sdk-suggest-with-polyfills-latest.js"></script>
+    {{end}}
     <style>
         :root {
             --lumon-teal: #0d7377;
@@ -187,48 +190,6 @@
             background: var(--border-light);
         }
 
-        .yandex-btn {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            height: 44px;
-            padding: 0 1.25rem 0 0;
-            background: #000000;
-            color: white;
-            border: none;
-            border-radius: 22px;
-            font-family: var(--font-primary);
-            font-size: 0.9375rem;
-            font-weight: 500;
-            cursor: pointer;
-            text-decoration: none;
-            transition: background 0.2s ease, transform 0.1s ease;
-        }
-
-        .yandex-btn:hover {
-            background: #1a1a1a;
-        }
-
-        .yandex-btn:active {
-            transform: scale(0.98);
-        }
-
-        .yandex-btn .yandex-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 22px;
-            background: #FC3F1D;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .yandex-btn .yandex-icon svg {
-            width: 24px;
-            height: 24px;
-        }
-
         /* Footer */
         .login-footer {
             text-align: center;
@@ -327,14 +288,7 @@
 
                 {{if .YandexEnabled}}
                 {{if .BotName}}<div class="auth-divider">или</div>{{end}}
-                <a href="/auth/yandex" class="yandex-btn">
-                    <span class="yandex-icon">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M13.32 19.74h2.01V4.26h-3.19c-3.21 0-5 1.78-5 4.32 0 2.16 1.01 3.37 2.82 4.63L7 19.74h2.2l3.38-5.16-1.21-.95c-1.48-1.1-2.24-1.89-2.24-3.26 0-1.42 1.06-2.42 3.04-2.42h1.15v12.79z" fill="white"/>
-                        </svg>
-                    </span>
-                    Войти с Яндекс ID
-                </a>
+                <div id="yandex-button-container" class="auth-widget"></div>
                 {{end}}
 
                 {{if and (not .BotName) (not .YandexEnabled)}}
@@ -357,5 +311,50 @@
             {{end}}
         </footer>
     </div>
+    {{if .YandexEnabled}}
+    <script>
+        window.YaAuthSuggest.init(
+            {
+                client_id: '{{.YandexClientID}}',
+                response_type: 'token',
+                redirect_uri: '{{.YandexTokenURL}}'
+            },
+            '{{.Origin}}',
+            {
+                view: 'button',
+                parentId: 'yandex-button-container',
+                buttonSize: 'm',
+                buttonView: 'main',
+                buttonTheme: 'light',
+                buttonBorderRadius: 22,
+                buttonIcon: 'ya',
+            }
+        )
+        .then(({handler}) => handler())
+        .then(data => {
+            // Send token to server for authentication
+            fetch('/auth/yandex/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ access_token: data.access_token })
+            })
+            .then(response => {
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    console.error('Auth failed');
+                    alert('Ошибка авторизации. Попробуйте ещё раз.');
+                }
+            })
+            .catch(error => {
+                console.error('Auth error:', error);
+                alert('Ошибка авторизации. Попробуйте ещё раз.');
+            });
+        })
+        .catch(error => console.log('Yandex SDK error:', error));
+    </script>
+    {{end}}
 </body>
 </html>

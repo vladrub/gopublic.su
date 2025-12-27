@@ -394,6 +394,14 @@ func (i *Ingress) serveDashboard(c *gin.Context) {
 		i.DashHandler.YandexAuth(c)
 	case "/auth/yandex/callback":
 		i.DashHandler.YandexCallback(c)
+	case "/auth/yandex/suggest/token":
+		i.DashHandler.YandexTokenPage(c)
+	case "/auth/yandex/token":
+		if c.Request.Method == http.MethodPost {
+			i.DashHandler.YandexTokenAuth(c)
+		} else {
+			c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
+		}
 	case "/link/telegram":
 		i.DashHandler.LinkTelegram(c)
 	case "/auth/telegram/link":
