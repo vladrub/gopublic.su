@@ -42,12 +42,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Get version
         id: version
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          fi
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -78,12 +73,7 @@ jobs:
         run: |
           mkdir -p dist
 
-          # Determine version from tag or commit
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            VERSION="dev-$(git rev-parse --short HEAD)"
-          fi
+          VERSION="${GITHUB_REF#refs/tags/}"
 
           LDFLAGS="-X main.ServerAddr=${SERVER_ADDR} -X gopublic/internal/version.Version=${VERSION} -X gopublic/internal/client/updater.PublicKeyBase64=${UPDATE_PUBKEY}"
           echo "Building clients with SERVER_ADDR=${SERVER_ADDR}, VERSION=${VERSION}"
@@ -103,7 +93,6 @@ jobs:
 
   release-client:
     needs: build-clients
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -188,7 +177,6 @@ jobs:
 
   deploy:
     needs: build-server-image
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS via SSH
