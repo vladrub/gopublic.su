@@ -547,10 +547,14 @@ func (m Model) renderLogs() string {
 			levelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // Gray
 		}
 
-		// Truncate long messages
+		// Truncate long messages based on terminal width
 		msg := log.Message
-		if len(msg) > 70 {
-			msg = msg[:67] + "..."
+		maxLen := 70
+		if m.width > 20 {
+			maxLen = m.width - 4 // Leave some margin
+		}
+		if len(msg) > maxLen {
+			msg = msg[:maxLen-3] + "..."
 		}
 
 		line := levelStyle.Render(msg)
