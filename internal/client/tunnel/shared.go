@@ -277,7 +277,45 @@ func (st *SharedTunnel) handleSession(conn net.Conn, connectStart time.Time) err
 	}
 	st.publishEvent(events.EventConnected, connectedData)
 
-	logger.Info("Connected! Bound domains: %v (latency: %v)", resp.BoundDomains, latency)
+	// Determine scheme (https for remote, http for local)
+	host, _, _ := net.SplitHostPort(st.ServerAddr)
+	if host == "" {
+		host = st.ServerAddr
+	}
+	isLocal := host == "localhost" || host == "127.0.0.1" || host == "::1"
+	scheme := "https"
+	if isLocal {
+		scheme = "http"
+	}
+
+	// Publish TunnelReady for each subdomain -> localPort mapping
+	// This populates the Forwarding section in TUI
+	for subdomain, localPort := range st.Tunnels {
+		// Find matching bound domain for this subdomain
+		var boundDomainsForTunnel []string
+		for _, bd := range resp.BoundDomains {
+			if strings.HasPrefix(bd, subdomain+".") || bd == subdomain {
+				boundDomainsForTunnel = append(boundDomainsForTunnel, bd)
+			}
+		}
+		if len(boundDomainsForTunnel) == 0 {
+			// Fallback: use any bound domain that starts with subdomain
+			for _, bd := range resp.BoundDomains {
+				if strings.Contains(bd, subdomain) {
+					boundDomainsForTunnel = append(boundDomainsForTunnel, bd)
+					break
+				}
+			}
+		}
+		if len(boundDomainsForTunnel) > 0 {
+			st.publishEvent(events.EventTunnelReady, events.TunnelReadyData{
+				Name:         subdomain,
+				LocalPort:    localPort,
+				BoundDomains: boundDomainsForTunnel,
+				Scheme:       scheme,
+			})
+		}
+	}
 
 	// Accept incoming streams
 	st.acceptStreams(session)
