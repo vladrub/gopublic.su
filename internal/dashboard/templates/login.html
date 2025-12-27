@@ -7,9 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-    {{if .YandexEnabled}}
-    <script src="https://yastatic.net/s3/passport-sdk/autofill/v1/sdk-suggest-with-polyfills-latest.js"></script>
-    {{end}}
     <style>
         :root {
             --lumon-teal: #0d7377;
@@ -171,6 +168,45 @@
             border-radius: 4px;
         }
 
+        /* Yandex ID Button - Official Design */
+        .yandex-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            height: 44px;
+            padding: 0 20px;
+            background: #000;
+            border: none;
+            border-radius: 22px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.15s ease;
+        }
+
+        .yandex-btn:hover {
+            background: #333;
+        }
+
+        .yandex-btn:active {
+            background: #1a1a1a;
+        }
+
+        .yandex-btn__icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .yandex-btn__text {
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 15px;
+            font-weight: 500;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
         .auth-divider {
             display: flex;
             align-items: center;
@@ -288,7 +324,15 @@
 
                 {{if .YandexEnabled}}
                 {{if .BotName}}<div class="auth-divider">или</div>{{end}}
-                <div id="yandex-button-container" class="auth-widget"></div>
+                <div class="auth-widget">
+                    <a href="/auth/yandex" class="yandex-btn">
+                        <svg class="yandex-btn__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z" fill="#FC3F1D"/>
+                            <path d="M13.7143 18.4286H15.7143V5.57143H12.5714C9.71429 5.57143 8.14286 7.28571 8.14286 9.57143C8.14286 11.5714 9.14286 12.7143 10.8571 13.8571L7.85714 18.4286H10.1429L13.4286 13.4286L12.1429 12.5714C10.7143 11.5714 10 10.8571 10 9.42857C10 8 10.8571 7.14286 12.5714 7.14286H13.7143V18.4286Z" fill="white"/>
+                        </svg>
+                        <span class="yandex-btn__text">Войти с Яндекс ID</span>
+                    </a>
+                </div>
                 {{end}}
 
                 {{if and (not .BotName) (not .YandexEnabled)}}
@@ -311,50 +355,5 @@
             {{end}}
         </footer>
     </div>
-    {{if .YandexEnabled}}
-    <script>
-        window.YaAuthSuggest.init(
-            {
-                client_id: '{{.YandexClientID}}',
-                response_type: 'token',
-                redirect_uri: '{{.YandexTokenURL}}'
-            },
-            '{{.Origin}}',
-            {
-                view: 'button',
-                parentId: 'yandex-button-container',
-                buttonSize: 'm',
-                buttonView: 'main',
-                buttonTheme: 'light',
-                buttonBorderRadius: 22,
-                buttonIcon: 'ya',
-            }
-        )
-        .then(({handler}) => handler())
-        .then(data => {
-            // Send token to server for authentication
-            fetch('/auth/yandex/token', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ access_token: data.access_token })
-            })
-            .then(response => {
-                if (response.ok) {
-                    window.location.href = '/';
-                } else {
-                    console.error('Auth failed');
-                    alert('Ошибка авторизации. Попробуйте ещё раз.');
-                }
-            })
-            .catch(error => {
-                console.error('Auth error:', error);
-                alert('Ошибка авторизации. Попробуйте ещё раз.');
-            });
-        })
-        .catch(error => console.log('Yandex SDK error:', error));
-    </script>
-    {{end}}
 </body>
 </html>

@@ -166,26 +166,19 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	var authURL, origin, yandexTokenURL string
+	var authURL string
 	if h.Domain == "localhost" || h.Domain == "127.0.0.1" {
 		authURL = fmt.Sprintf("http://%s/auth/telegram", h.Domain)
-		origin = fmt.Sprintf("http://%s", h.Domain)
-		yandexTokenURL = fmt.Sprintf("http://%s/auth/yandex/suggest/token", h.Domain)
 	} else {
 		authURL = fmt.Sprintf("https://app.%s/auth/telegram", h.Domain)
-		origin = fmt.Sprintf("https://app.%s", h.Domain)
-		yandexTokenURL = fmt.Sprintf("https://app.%s/auth/yandex/suggest/token", h.Domain)
 	}
 
 	c.HTML(http.StatusOK, "login.html", gin.H{
-		"BotName":        h.BotName,
-		"AuthURL":        authURL,
-		"GitHubRepo":     h.GitHubRepo,
-		"Version":        version.Version,
-		"YandexEnabled":  h.YandexClientID != "" && h.YandexClientSecret != "",
-		"YandexClientID": h.YandexClientID,
-		"YandexTokenURL": template.JS(yandexTokenURL), // Prevent escaping in JS context
-		"Origin":         template.JS(origin),         // Prevent escaping in JS context
+		"BotName":       h.BotName,
+		"AuthURL":       authURL,
+		"GitHubRepo":    h.GitHubRepo,
+		"Version":       version.Version,
+		"YandexEnabled": h.YandexClientID != "" && h.YandexClientSecret != "",
 	})
 }
 
