@@ -27,7 +27,7 @@ jobs:
 
   build-server-image:
     needs: test
-    if: github.event_name != 'pull_request'
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -57,7 +57,7 @@ jobs:
 
   build-clients:
     needs: test
-    if: github.event_name != 'pull_request'
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
