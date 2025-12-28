@@ -48,9 +48,10 @@ func NewPendingLoginStore() *PendingLoginStore {
 	return store
 }
 
-// generateHash creates a cryptographically random 32-byte hash
+// generateHash creates a cryptographically random 25-byte hash (50 hex chars)
+// Shortened to fit Telegram's 64-byte callback_data limit: "a:" + 50 = 52 bytes
 func generateHash() (string, error) {
-	bytes := make([]byte, 32)
+	bytes := make([]byte, 25)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
