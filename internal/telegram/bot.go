@@ -177,24 +177,29 @@ func (b *Bot) getUpdates() ([]Update, error) {
 
 func (b *Bot) handleUpdate(update Update) {
 	if update.Message == nil {
+		log.Printf("Telegram bot: update %d has no message", update.UpdateID)
 		return
 	}
 
 	msg := update.Message
+	log.Printf("Telegram bot: message from user %d (admin=%d), chat %d, text: %s",
+		msg.From.ID, b.adminID, msg.Chat.ID, msg.Text)
 
 	// Only respond to admin (check both user ID and chat ID for security)
 	if msg.From == nil || msg.From.ID != b.adminID {
-		// Silently ignore messages from non-admins
+		log.Printf("Telegram bot: ignoring message from non-admin user %d", msg.From.ID)
 		return
 	}
 
 	// Also verify the chat is a private chat with admin (not a group)
 	if msg.Chat.ID != b.adminID {
+		log.Printf("Telegram bot: ignoring message from non-admin chat %d", msg.Chat.ID)
 		return
 	}
 
 	// Handle commands
 	text := strings.TrimSpace(msg.Text)
+	log.Printf("Telegram bot: processing command: %s", text)
 	switch {
 	case text == "/stats" || text == "/start":
 		b.sendStats(msg.Chat.ID)
