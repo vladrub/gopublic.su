@@ -142,31 +142,36 @@ func (b *Bot) getUpdates() ([]Update, error) {
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?%s", b.token, params.Encode())
 
+	log.Printf("Telegram bot: requesting updates (offset=%d)...", b.lastUpdateID+1)
+
 	req, err := http.NewRequestWithContext(b.ctx, "GET", apiURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
 	resp, err := b.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	log.Printf("Telegram bot: got response status %d", resp.StatusCode)
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read body: %w", err)
 	}
 
 	var response GetUpdatesResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal: %w (body: %s)", err, string(body)[:min(200, len(body))])
 	}
 
 	if !response.OK {
-		return nil, fmt.Errorf("telegram API returned not OK")
+		return nil, fmt.Errorf("telegram API returned not OK (body: %s)", string(body)[:min(200, len(body))])
 	}
 
+	log.Printf("Telegram bot: got %d updates", len(response.Result))
 	return response.Result, nil
 }
 
