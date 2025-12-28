@@ -417,11 +417,13 @@ func (b *Bot) handleAuthStart(msg *Message, hash string) {
 		browserInfo,
 	)
 
+	// Telegram limits callback_data to 64 bytes
+	// Using short prefixes: "a:" for approve, "r:" for reject
 	keyboard := &InlineKeyboardMarkup{
 		InlineKeyboard: [][]InlineKeyboardButton{
 			{
-				{Text: "Разрешить", CallbackData: "auth_approve:" + hash},
-				{Text: "Отклонить", CallbackData: "auth_reject:" + hash},
+				{Text: "✓ Разрешить", CallbackData: "a:" + hash},
+				{Text: "✗ Отклонить", CallbackData: "r:" + hash},
 			},
 		},
 	}
@@ -512,9 +514,9 @@ func (b *Bot) handleCallbackQuery(cq *CallbackQuery) {
 	action, hash := parts[0], parts[1]
 
 	switch action {
-	case "auth_approve":
+	case "a": // approve
 		b.handleAuthApprove(cq, hash)
-	case "auth_reject":
+	case "r": // reject
 		b.handleAuthReject(cq, hash)
 	default:
 		b.answerCallbackQuery(cq.ID, "Неизвестное действие", true)
