@@ -577,8 +577,8 @@
                     showState('error');
                     break;
                 case 'pending':
-                    // Check if user opened the bot (show waiting state)
-                    showState('waiting');
+                    // Stay in 'ready' state until user clicks the link
+                    // The 'waiting' state is triggered by clicking the Telegram link
                     break;
             }
         } catch (e) {
@@ -592,6 +592,11 @@
         document.getElementById('auth-waiting').style.display = state === 'waiting' ? 'block' : 'none';
         document.getElementById('auth-error').style.display = state === 'error' ? 'block' : 'none';
     }
+
+    // Show 'waiting' state when user clicks the Telegram link
+    document.getElementById('telegram-link').addEventListener('click', function() {
+        showState('waiting');
+    });
 
     // ES modules are deferred by default, so DOM is ready
     initTelegramAuth();

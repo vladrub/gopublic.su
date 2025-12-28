@@ -267,8 +267,10 @@ func (b *Bot) handleUpdate(update Update) {
 
 	log.Printf("Telegram bot: processing command: %s", text)
 	switch {
-	case text == "/stats" || text == "/start":
+	case text == "/stats":
 		b.sendStats(msg.Chat.ID)
+	case text == "/start":
+		b.sendMessage(msg.Chat.ID, "Привет! Я бот GoPublic.\n\nИспользуйте /stats для просмотра статистики.")
 	case text == "/help":
 		b.sendHelp(msg.Chat.ID)
 	}
