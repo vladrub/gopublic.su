@@ -380,6 +380,55 @@ func escapeMarkdown(s string) string {
 	return replacer.Replace(s)
 }
 
+// GeoIPResponse represents the response from ip-api.com
+type GeoIPResponse struct {
+	Status      string `json:"status"`
+	Country     string `json:"country"`
+	CountryCode string `json:"countryCode"`
+	Region      string `json:"region"`
+	RegionName  string `json:"regionName"`
+	City        string `json:"city"`
+}
+
+// getGeoLocation fetches location info for an IP address using ip-api.com
+// Returns empty string if lookup fails (non-blocking, best-effort)
+func getGeoLocation(ip string) string {
+	// Skip private/local IPs
+	if ip == "" || ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") {
+		return ""
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://ip-api.com/json/%s?fields=status,country,countryCode,regionName,city", ip))
+	if err != nil {
+		log.Printf("GeoIP lookup failed for %s: %v", ip, err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	var geo GeoIPResponse
+	if err := json.NewDecoder(resp.Body).Decode(&geo); err != nil || geo.Status != "success" {
+		return ""
+	}
+
+	// Format: "City, Region, Country" or "City, Country" or just "Country"
+	parts := []string{}
+	if geo.City != "" {
+		parts = append(parts, geo.City)
+	}
+	if geo.RegionName != "" && geo.RegionName != geo.City {
+		parts = append(parts, geo.RegionName)
+	}
+	if geo.Country != "" {
+		parts = append(parts, geo.Country)
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, ", ")
+}
+
 // escapeMarkdownV2 escapes special characters for MarkdownV2 parse mode
 func escapeMarkdownV2(s string) string {
 	// MarkdownV2 requires escaping: _ * [ ] ( ) ~ ` > # + - = | { } . !
@@ -426,6 +475,11 @@ func (b *Bot) handleAuthStart(msg *Message, hash string) {
 
 	browserInfo := parseUserAgent(pending.UserAgent)
 
+	// Fetch and cache geo location if not already done
+	if pending.GeoLocation == "" {
+		pending.GeoLocation = getGeoLocation(pending.IP)
+	}
+
 	var actionText string
 	if pending.IsLinking {
 		actionText = "Привязать Telegram к аккаунту"
@@ -433,13 +487,19 @@ func (b *Bot) handleAuthStart(msg *Message, hash string) {
 		actionText = "Войти в аккаунт"
 	}
 
+	// Build IP line with optional geo location
+	ipLine := fmt.Sprintf("IP-адрес: `%s`", pending.IP)
+	if pending.GeoLocation != "" {
+		ipLine += fmt.Sprintf(" (%s)", pending.GeoLocation)
+	}
+
 	text := fmt.Sprintf(
 		"*%s GoPublic*\n\n"+
-			"IP-адрес: `%s`\n"+
+			"%s\n"+
 			"Браузер: %s\n\n"+
 			"Если это не вы — нажмите Отклонить.",
 		actionText,
-		pending.IP,
+		ipLine,
 		browserInfo,
 	)
 
@@ -562,6 +622,7 @@ func (b *Bot) handleAuthApprove(cq *CallbackQuery, hash string) {
 
 	// Save info before approve modifies/deletes it
 	ip := pending.IP
+	geoLocation := pending.GeoLocation
 	browserInfo := parseUserAgent(pending.UserAgent)
 
 	photoURL := b.getUserAvatarURL(cq.From.ID)
@@ -569,18 +630,26 @@ func (b *Bot) handleAuthApprove(cq *CallbackQuery, hash string) {
 	if !b.pendingLogins.Approve(hash, cq.From.ID, cq.From.FirstName, cq.From.LastName, cq.From.Username, photoURL) {
 		b.answerCallbackQuery(cq.ID, "Ссылка истекла или уже использована", true)
 		if cq.Message != nil {
-			b.editMessageText(cq.Message.Chat.ID, cq.Message.MessageID, "Ссылка для входа истекла.")
+			b.editMessageText(cq.Message.Chat.ID, cq.Message.MessageID, "Ссылка для входа истекла\\.")
 		}
 		return
 	}
 
 	b.answerCallbackQuery(cq.ID, "Вход разрешён!", false)
 	if cq.Message != nil {
+		// Build IP line with geo location
+		ipLine := ip
+		if geoLocation != "" {
+			ipLine = fmt.Sprintf("%s \\(%s\\)", escapeMarkdownV2(ip), escapeMarkdownV2(geoLocation))
+		} else {
+			ipLine = escapeMarkdownV2(ip)
+		}
+
 		msg := fmt.Sprintf(
 			"*✓ Вход разрешён*\n\n"+
 				">IP: %s\n"+
 				">Браузер: %s",
-			escapeMarkdownV2(ip), escapeMarkdownV2(browserInfo),
+			ipLine, escapeMarkdownV2(browserInfo),
 		)
 		b.editMessageText(cq.Message.Chat.ID, cq.Message.MessageID, msg)
 	}
@@ -589,9 +658,10 @@ func (b *Bot) handleAuthApprove(cq *CallbackQuery, hash string) {
 func (b *Bot) handleAuthReject(cq *CallbackQuery, hash string) {
 	// Get pending login info before rejecting (for history message)
 	pending, ok := b.pendingLogins.Get(hash)
-	var ip, browserInfo string
+	var ip, geoLocation, browserInfo string
 	if ok {
 		ip = pending.IP
+		geoLocation = pending.GeoLocation
 		browserInfo = parseUserAgent(pending.UserAgent)
 	}
 
@@ -601,12 +671,18 @@ func (b *Bot) handleAuthReject(cq *CallbackQuery, hash string) {
 	if cq.Message != nil {
 		var msg string
 		if ip != "" {
+			// Build IP line with geo location
+			ipLine := escapeMarkdownV2(ip)
+			if geoLocation != "" {
+				ipLine = fmt.Sprintf("%s \\(%s\\)", escapeMarkdownV2(ip), escapeMarkdownV2(geoLocation))
+			}
+
 			msg = fmt.Sprintf(
 				"*✗ Вход отклонён*\n\n"+
 					">IP: %s\n"+
 					">Браузер: %s\n\n"+
 					"_Если это была попытка фишинга — будьте осторожны_",
-				escapeMarkdownV2(ip), escapeMarkdownV2(browserInfo),
+				ipLine, escapeMarkdownV2(browserInfo),
 			)
 		} else {
 			msg = "*✗ Вход отклонён*"

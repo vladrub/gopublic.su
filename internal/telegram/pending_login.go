@@ -17,18 +17,19 @@ const (
 
 // PendingLogin represents a pending authentication request
 type PendingLogin struct {
-	Hash       string
-	IP         string
-	UserAgent  string
-	CreatedAt  time.Time
-	Status     string
-	TelegramID int64
-	FirstName  string
-	LastName   string
-	Username   string
-	PhotoURL   string
-	IsLinking  bool
-	UserID     uint
+	Hash        string
+	IP          string
+	GeoLocation string // City, Region, Country (cached from GeoIP lookup)
+	UserAgent   string
+	CreatedAt   time.Time
+	Status      string
+	TelegramID  int64
+	FirstName   string
+	LastName    string
+	Username    string
+	PhotoURL    string
+	IsLinking   bool
+	UserID      uint
 }
 
 // PendingLoginStore is a thread-safe in-memory store for pending logins
