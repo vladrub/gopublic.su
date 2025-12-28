@@ -92,29 +92,44 @@ type GetUpdatesResponse struct {
 }
 
 func (b *Bot) pollUpdates() {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	log.Println("Telegram bot: starting poll loop")
 
+	// Make first request immediately, then use ticker
 	for {
-		select {
-		case <-b.stopCh:
-			return
-		case <-b.ctx.Done():
-			return
-		case <-ticker.C:
-			updates, err := b.getUpdates()
-			if err != nil {
-				// Don't log context cancellation errors during shutdown
-				if b.ctx.Err() == nil {
-					log.Printf("Error getting updates: %v", err)
-				}
+		updates, err := b.getUpdates()
+		if err != nil {
+			// Don't log context cancellation errors during shutdown
+			if b.ctx.Err() != nil {
+				log.Println("Telegram bot: context cancelled, stopping")
+				return
+			}
+			log.Printf("Telegram bot: error getting updates: %v", err)
+			// Wait before retry on error
+			select {
+			case <-b.stopCh:
+				return
+			case <-b.ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
 				continue
 			}
+		}
 
-			for _, update := range updates {
-				b.handleUpdate(update)
-				b.lastUpdateID = update.UpdateID
-			}
+		for _, update := range updates {
+			b.handleUpdate(update)
+			b.lastUpdateID = update.UpdateID
+		}
+
+		// Check for stop signal between requests
+		select {
+		case <-b.stopCh:
+			log.Println("Telegram bot: received stop signal")
+			return
+		case <-b.ctx.Done():
+			log.Println("Telegram bot: context done")
+			return
+		default:
+			// Continue immediately to next long-poll request
 		}
 	}
 }
