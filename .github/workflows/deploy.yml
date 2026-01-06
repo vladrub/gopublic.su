@@ -25,6 +25,23 @@ jobs:
       - name: Test
         run: go test -v ./...
 
+      - name: Notify Telegram - Tests Complete
+        if: always() && startsWith(github.ref, 'refs/tags/v')
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.ADMIN_TELEGRAM_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ${{ job.status == 'success' && '✅' || '❌' }} *Tests ${{ job.status }}*
+
+            Version: `${{ github.ref_name }}`
+            Commit: `${{ github.sha }}`
+
+            ${{ job.status == 'success' && 'Начинается сборка и деплой...' || 'Деплой отменен из-за ошибок тестов!' }}
+
+            [View workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
   build-server-image:
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
@@ -199,3 +216,22 @@ jobs:
 
             # Show status
             docker compose ps
+
+      - name: Notify Telegram - Deploy Complete
+        if: always()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.ADMIN_TELEGRAM_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ${{ job.status == 'success' && '🚀' || '❌' }} *Deploy ${{ job.status }}*
+
+            Version: `${{ github.ref_name }}`
+            Server: `${{ secrets.VPS_HOST }}`
+
+            ${{ job.status == 'success' && 'Сервер обновлен и запущен!' || 'Ошибка при деплое на VPS!' }}
+
+            Docker image: `ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+
+            [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
