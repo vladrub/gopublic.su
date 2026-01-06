@@ -412,6 +412,44 @@ func (t *Tunnel) proxyStream(remote net.Conn) {
 		t.publishEvent(events.EventError, events.ErrorData{Error: err, Context: "read_response"})
 		return
 	}
+
+	// Check if this is a WebSocket upgrade (101 Switching Protocols)
+	isUpgrade := strings.Contains(strings.ToLower(req.Header.Get("Connection")), "upgrade")
+
+	if isUpgrade && resp.StatusCode == http.StatusSwitchingProtocols {
+		// This is a successful WebSocket upgrade
+		// Add Cache-Control header if --no-cache flag is set
+		if t.NoCache {
+			resp.Header.Set("Cache-Control", "no-store, no-cache, must-revalidate")
+		}
+
+		// Forward the 101 response to remote
+		if err := resp.Write(remote); err != nil {
+			logger.Error("Failed to write upgrade response to remote: %v", err)
+			t.publishEvent(events.EventError, events.ErrorData{Error: err, Context: "write_response"})
+			resp.Body.Close()
+			return
+		}
+
+		// Record the upgrade in inspector (without body buffering)
+		inspector.AddExchange(req, reqBody, resp, []byte("[WebSocket streaming]"), time.Since(startTime))
+
+		// Publish upgrade event
+		t.publishEvent(events.EventRequestComplete, events.RequestData{
+			Method:   req.Method,
+			Path:     req.URL.Path,
+			Status:   resp.StatusCode,
+			Duration: time.Since(startTime),
+			Bytes:    0, // Can't measure WebSocket traffic here
+		})
+
+		// Now switch to bidirectional copying
+		// Use respReader to preserve any buffered data from local
+		t.copyBidirectionalWithReader(remote, local, respReader)
+		return
+	}
+
+	// Normal HTTP response - buffer and record for inspector
 	defer resp.Body.Close()
 
 	// Buffer response body for inspector (with error handling)
@@ -488,6 +526,39 @@ func (t *Tunnel) copyBidirectional(local, remote net.Conn) {
 		}
 		// Half-close: signal EOF to remote
 		if tcpConn, ok := remote.(*net.TCPConn); ok {
+			tcpConn.CloseWrite()
+		}
+	}()
+
+	wg.Wait()
+}
+
+// copyBidirectionalWithReader copies data bidirectionally using a buffered reader
+// for one side to preserve peeked/buffered data during WebSocket upgrades.
+func (t *Tunnel) copyBidirectionalWithReader(remote net.Conn, local net.Conn, localReader *bufio.Reader) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Local (via reader) -> Remote
+	go func() {
+		defer wg.Done()
+		_, err := io.Copy(remote, localReader)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			logger.Warn("Error copying local->remote: %v", err)
+		}
+		if tcpConn, ok := remote.(*net.TCPConn); ok {
+			tcpConn.CloseWrite()
+		}
+	}()
+
+	// Remote -> Local
+	go func() {
+		defer wg.Done()
+		_, err := io.Copy(local, remote)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			logger.Warn("Error copying remote->local: %v", err)
+		}
+		if tcpConn, ok := local.(*net.TCPConn); ok {
 			tcpConn.CloseWrite()
 		}
 	}()

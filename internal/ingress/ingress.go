@@ -3,12 +3,16 @@ package ingress
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
 	sentrygin "github.com/getsentry/sentry-go/gin"
@@ -475,25 +479,116 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 		return
 	}
 
-	// Read and forward response
-	resp, err := http.ReadResponse(bufio.NewReader(stream), c.Request)
-	if err != nil {
-		sentry.CaptureErrorWithContext(c, err, "Failed to read response from stream")
-		c.Status(http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
+	// Check if this is an upgrade request (WebSocket, h2c, etc.)
+	isUpgrade := isUpgradeRequest(c.Request)
 
-	// Copy headers
-	for k, vv := range resp.Header {
-		for _, v := range vv {
-			c.Writer.Header().Add(k, v)
+	var responseBytes int64
+
+	if isUpgrade {
+		// For upgrade requests, use a peekable reader to avoid consuming WebSocket frames
+		peekReader := bufio.NewReader(stream)
+
+		// Peek at enough bytes to read the status line and headers (8KB should be sufficient)
+		peeked, err := peekReader.Peek(8192)
+		if err != nil && err != io.EOF && err != bufio.ErrBufferFull {
+			sentry.CaptureErrorWithContext(c, err, "Failed to peek response")
+			c.Status(http.StatusBadGateway)
+			return
 		}
-	}
 
-	// Write status and body, counting response bytes
-	c.Status(resp.StatusCode)
-	responseBytes, _ := io.Copy(c.Writer, resp.Body)
+		// Parse just the status line from peeked data to check for 101
+		peekResp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(peeked)), c.Request)
+		if err != nil {
+			sentry.CaptureErrorWithContext(c, err, "Failed to parse peeked response")
+			c.Status(http.StatusBadGateway)
+			return
+		}
+		peekResp.Body.Close()
+
+		if peekResp.StatusCode == http.StatusSwitchingProtocols {
+			// This is a successful upgrade (101 Switching Protocols)
+			// Re-read the response properly to consume headers from peekReader
+			actualResp, err := http.ReadResponse(peekReader, c.Request)
+			if err != nil {
+				sentry.CaptureErrorWithContext(c, err, "Failed to read upgrade response")
+				c.Status(http.StatusBadGateway)
+				return
+			}
+
+			// Copy response headers to client
+			for k, vv := range actualResp.Header {
+				for _, v := range vv {
+					c.Writer.Header().Add(k, v)
+				}
+			}
+
+			// Write the 101 status
+			c.Status(http.StatusSwitchingProtocols)
+
+			// Flush headers to client immediately
+			if flusher, ok := c.Writer.(http.Flusher); ok {
+				flusher.Flush()
+			}
+
+			// Hijack the connection to get raw access
+			hijacker, ok := c.Writer.(http.Hijacker)
+			if !ok {
+				sentry.CaptureErrorWithContext(c, errors.New("response writer doesn't support hijacking"), "Cannot hijack connection for upgrade")
+				return
+			}
+
+			clientConn, _, err := hijacker.Hijack()
+			if err != nil {
+				sentry.CaptureErrorWithContext(c, err, "Failed to hijack connection")
+				return
+			}
+			defer clientConn.Close()
+
+			// Now do bidirectional copy between clientConn and stream (via peekReader)
+			responseBytes = copyBidirectionalWithReader(clientConn, stream, peekReader)
+		} else {
+			// Upgrade failed (non-101 response), handle as normal HTTP
+			// Re-read response properly from peekReader
+			resp, err := http.ReadResponse(peekReader, c.Request)
+			if err != nil {
+				sentry.CaptureErrorWithContext(c, err, "Failed to read response from stream")
+				c.Status(http.StatusBadGateway)
+				return
+			}
+			defer resp.Body.Close()
+
+			// Copy headers
+			for k, vv := range resp.Header {
+				for _, v := range vv {
+					c.Writer.Header().Add(k, v)
+				}
+			}
+
+			// Write status and body
+			c.Status(resp.StatusCode)
+			responseBytes, _ = io.Copy(c.Writer, resp.Body)
+		}
+	} else {
+		// Normal HTTP request/response - existing behavior
+		resp, err := http.ReadResponse(bufio.NewReader(stream), c.Request)
+		if err != nil {
+			sentry.CaptureErrorWithContext(c, err, "Failed to read response from stream")
+			c.Status(http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		// Copy headers
+		for k, vv := range resp.Header {
+			for _, v := range vv {
+				c.Writer.Header().Add(k, v)
+			}
+		}
+
+		// Write status and body, counting response bytes
+		c.Status(resp.StatusCode)
+		responseBytes, _ = io.Copy(c.Writer, resp.Body)
+	}
 
 	// Record bandwidth usage asynchronously
 	totalBytes := requestBytes + responseBytes
@@ -504,4 +599,51 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 			}
 		}(entry.UserID, totalBytes)
 	}
+}
+
+// isUpgradeRequest checks if the HTTP request is attempting a protocol upgrade
+// (WebSocket, h2c, etc.) by examining the Connection header.
+func isUpgradeRequest(req *http.Request) bool {
+	return strings.Contains(strings.ToLower(req.Header.Get("Connection")), "upgrade")
+}
+
+// copyBidirectionalWithReader copies data bidirectionally between a client connection
+// and a stream, using a buffered reader for the stream side to preserve peeked data.
+// Returns total bytes transferred in both directions.
+func copyBidirectionalWithReader(client net.Conn, stream net.Conn, streamReader *bufio.Reader) int64 {
+	var wg sync.WaitGroup
+	var totalBytes atomic.Int64
+
+	// Stream (via reader) -> Client
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n, err := io.Copy(client, streamReader)
+		totalBytes.Add(n)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			log.Printf("Error copying stream->client: %v", err)
+		}
+		// Signal EOF to client
+		if tcpConn, ok := client.(*net.TCPConn); ok {
+			tcpConn.CloseWrite()
+		}
+	}()
+
+	// Client -> Stream
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n, err := io.Copy(stream, client)
+		totalBytes.Add(n)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			log.Printf("Error copying client->stream: %v", err)
+		}
+		// Signal EOF to stream
+		if tcpConn, ok := stream.(*net.TCPConn); ok {
+			tcpConn.CloseWrite()
+		}
+	}()
+
+	wg.Wait()
+	return totalBytes.Load()
 }
