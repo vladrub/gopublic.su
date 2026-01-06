@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"gorm.io/driver/sqlite"
@@ -12,6 +13,11 @@ import (
 	apperrors "gopublic/internal/errors"
 	"gopublic/internal/models"
 )
+
+func dayStartLocal(t time.Time) time.Time {
+	local := t.In(time.Local)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.Local)
+}
 
 // Common errors for storage operations.
 // These are aliases to the centralized errors package for backward compatibility.
@@ -257,7 +263,7 @@ func (s *SQLiteStore) GetAbuseReports(status string) ([]models.AbuseReport, erro
 // --- Bandwidth Operations ---
 
 func (s *SQLiteStore) GetUserBandwidthToday(userID uint) (int64, error) {
-	today := time.Now().Truncate(24 * time.Hour)
+	today := dayStartLocal(time.Now())
 	var bandwidth models.UserBandwidth
 	result := s.db.Where("user_id = ? AND date = ?", userID, today).First(&bandwidth)
 	if result.Error != nil {
@@ -270,7 +276,7 @@ func (s *SQLiteStore) GetUserBandwidthToday(userID uint) (int64, error) {
 }
 
 func (s *SQLiteStore) AddUserBandwidth(userID uint, bytes int64) error {
-	today := time.Now().Truncate(24 * time.Hour)
+	today := dayStartLocal(time.Now())
 
 	// Use upsert: insert or update if exists
 	result := s.db.Exec(`
@@ -282,6 +288,65 @@ func (s *SQLiteStore) AddUserBandwidth(userID uint, bytes int64) error {
 	`, userID, today, bytes)
 
 	return result.Error
+}
+
+// ConsumeUserBandwidthWithinLimit atomically adds bytes to today's bandwidth counter.
+// Returns allowed=false when the daily limit would be exceeded.
+func (s *SQLiteStore) ConsumeUserBandwidthWithinLimit(userID uint, bytes int64, dailyLimit int64) (allowed bool, bytesUsed int64, err error) {
+	if dailyLimit <= 0 {
+		return true, 0, nil
+	}
+	if bytes <= 0 {
+		used, err := s.GetUserBandwidthToday(userID)
+		return true, used, err
+	}
+	if bytes > dailyLimit {
+		used, err := s.GetUserBandwidthToday(userID)
+		return false, used, err
+	}
+
+	today := dayStartLocal(time.Now())
+
+	for attempt := 0; attempt < 3; attempt++ {
+		// Fast path: update existing row only if it stays within limit.
+		res := s.db.Exec(`
+			UPDATE user_bandwidths
+			SET bytes_used = bytes_used + ?, updated_at = datetime('now')
+			WHERE user_id = ? AND date = ? AND (bytes_used + ?) <= ?
+		`, bytes, userID, today, bytes, dailyLimit)
+		if res.Error != nil {
+			return false, 0, res.Error
+		}
+		if res.RowsAffected == 1 {
+			used, err := s.GetUserBandwidthToday(userID)
+			return true, used, err
+		}
+
+		// If there's no row yet, try insert for today's first usage.
+		ins := s.db.Exec(`
+			INSERT INTO user_bandwidths (user_id, date, bytes_used, created_at, updated_at)
+			VALUES (?, ?, ?, datetime('now'), datetime('now'))
+		`, userID, today, bytes)
+		if ins.Error == nil {
+			used, err := s.GetUserBandwidthToday(userID)
+			return true, used, err
+		}
+
+		// Concurrent insert can race; retry then we'll hit UPDATE path.
+		if strings.Contains(ins.Error.Error(), "UNIQUE constraint failed") {
+			continue
+		}
+
+		// Otherwise, the row exists but we couldn't UPDATE due to limit.
+		used, getErr := s.GetUserBandwidthToday(userID)
+		if getErr != nil {
+			return false, 0, getErr
+		}
+		return false, used, nil
+	}
+
+	used, err := s.GetUserBandwidthToday(userID)
+	return false, used, err
 }
 
 // GetUserTotalBandwidth returns total bandwidth used by user across all days
@@ -317,7 +382,7 @@ func (s *SQLiteStore) GetTotalUserCount() (int64, error) {
 
 // GetTopUsersByBandwidthToday returns top N users by bandwidth usage today
 func (s *SQLiteStore) GetTopUsersByBandwidthToday(limit int) ([]UserStats, error) {
-	today := time.Now().Truncate(24 * time.Hour)
+	today := dayStartLocal(time.Now())
 
 	var stats []UserStats
 	result := s.db.Table("user_bandwidths").
@@ -598,6 +663,14 @@ func AddUserBandwidth(userID uint, bytes int64) error {
 		return ErrDBError
 	}
 	return (&SQLiteStore{db: DB}).AddUserBandwidth(userID, bytes)
+}
+
+// ConsumeUserBandwidthWithinLimit adds bytes for today using the global DB.
+func ConsumeUserBandwidthWithinLimit(userID uint, bytes int64, dailyLimit int64) (bool, int64, error) {
+	if DB == nil {
+		return false, 0, ErrDBError
+	}
+	return (&SQLiteStore{db: DB}).ConsumeUserBandwidthWithinLimit(userID, bytes, dailyLimit)
 }
 
 // GetTotalUserCount gets total user count using the global DB.

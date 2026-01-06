@@ -14,8 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gin-gonic/gin"
 	sentrygin "github.com/getsentry/sentry-go/gin"
+	"github.com/gin-gonic/gin"
 
 	"gopublic/internal/config"
 	"gopublic/internal/dashboard"
@@ -29,6 +29,8 @@ import (
 // hostPattern validates hostnames (RFC 1123 compliant + localhost).
 // Allows alphanumeric, hyphens, dots; max 253 chars; labels max 63 chars.
 var hostPattern = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
+
+var errBandwidthLimitExceeded = errors.New("daily bandwidth limit exceeded")
 
 type Ingress struct {
 	Registry            *server.TunnelRegistry
@@ -441,13 +443,32 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 		return
 	}
 
-	// Check bandwidth limit before proxying
-	if i.DailyBandwidthLimit > 0 {
-		bytesUsed, err := storage.GetUserBandwidthToday(entry.UserID)
+	// Capture request size (we need this before opening the stream so we can enforce the limit).
+	var reqBuf bytes.Buffer
+	if err := c.Request.Write(&reqBuf); err != nil {
+		sentry.CaptureErrorWithContext(c, err, "Failed to serialize request")
+		c.Status(http.StatusBadGateway)
+		return
+	}
+	requestBytes := int64(reqBuf.Len())
+
+	consume := func(bytes int64) (bool, error) {
+		if i.DailyBandwidthLimit <= 0 || bytes <= 0 {
+			return true, nil
+		}
+		allowed, _, err := storage.ConsumeUserBandwidthWithinLimit(entry.UserID, bytes, i.DailyBandwidthLimit)
 		if err != nil {
-			log.Printf("Failed to check bandwidth for user %d: %v", entry.UserID, err)
-			// Continue anyway - don't block on DB errors
-		} else if bytesUsed >= i.DailyBandwidthLimit {
+			log.Printf("Failed to consume bandwidth for user %d: %v", entry.UserID, err)
+			// Fail-open on DB errors
+			return true, nil
+		}
+		return allowed, nil
+	}
+
+	// Reserve quota for request bytes before opening the tunnel stream.
+	if i.DailyBandwidthLimit > 0 && requestBytes > 0 {
+		allowed, _ := consume(requestBytes)
+		if !allowed {
 			c.Header("Retry-After", "86400") // 24 hours
 			c.String(http.StatusTooManyRequests, "Daily bandwidth limit exceeded. Please try again tomorrow.")
 			return
@@ -463,15 +484,6 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 	}
 	defer stream.Close()
 
-	// Capture request size
-	var reqBuf bytes.Buffer
-	if err := c.Request.Write(&reqBuf); err != nil {
-		sentry.CaptureErrorWithContext(c, err, "Failed to serialize request")
-		c.Status(http.StatusBadGateway)
-		return
-	}
-	requestBytes := int64(reqBuf.Len())
-
 	// Forward request to tunnel
 	if _, err := stream.Write(reqBuf.Bytes()); err != nil {
 		sentry.CaptureErrorWithContext(c, err, "Failed to write request to stream")
@@ -482,7 +494,7 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 	// Check if this is an upgrade request (WebSocket, h2c, etc.)
 	isUpgrade := isUpgradeRequest(c.Request)
 
-	var responseBytes int64
+	// Note: bandwidth is consumed during streaming; we don't need to count response bytes here.
 
 	if isUpgrade {
 		// For upgrade requests, use a peekable reader to avoid consuming WebSocket frames
@@ -545,7 +557,7 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 			defer clientConn.Close()
 
 			// Now do bidirectional copy between clientConn and stream (via peekReader)
-			responseBytes = copyBidirectionalWithReader(clientConn, stream, peekReader)
+			_ = copyBidirectionalWithReaderCharging(clientConn, stream, peekReader, consume)
 		} else {
 			// Upgrade failed (non-101 response), handle as normal HTTP
 			// Re-read response properly from peekReader
@@ -566,7 +578,15 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 
 			// Write status and body
 			c.Status(resp.StatusCode)
-			responseBytes, _ = io.Copy(c.Writer, resp.Body)
+			closeOnce := sync.Once{}
+			closeUpstream := func() {
+				closeOnce.Do(func() {
+					_ = resp.Body.Close()
+					_ = stream.Close()
+				})
+			}
+			cw := &bandwidthChargingWriter{w: c.Writer, consume: consume, onLimit: closeUpstream}
+			_, _ = io.Copy(cw, resp.Body)
 		}
 	} else {
 		// Normal HTTP request/response - existing behavior
@@ -587,17 +607,15 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 
 		// Write status and body, counting response bytes
 		c.Status(resp.StatusCode)
-		responseBytes, _ = io.Copy(c.Writer, resp.Body)
-	}
-
-	// Record bandwidth usage asynchronously
-	totalBytes := requestBytes + responseBytes
-	if i.DailyBandwidthLimit > 0 && totalBytes > 0 {
-		go func(userID uint, bytes int64) {
-			if err := storage.AddUserBandwidth(userID, bytes); err != nil {
-				log.Printf("Failed to record bandwidth for user %d: %v", userID, err)
-			}
-		}(entry.UserID, totalBytes)
+		closeOnce := sync.Once{}
+		closeUpstream := func() {
+			closeOnce.Do(func() {
+				_ = resp.Body.Close()
+				_ = stream.Close()
+			})
+		}
+		cw := &bandwidthChargingWriter{w: c.Writer, consume: consume, onLimit: closeUpstream}
+		_, _ = io.Copy(cw, resp.Body)
 	}
 }
 
@@ -641,6 +659,204 @@ func copyBidirectionalWithReader(client net.Conn, stream net.Conn, streamReader 
 		// Signal EOF to stream
 		if tcpConn, ok := stream.(*net.TCPConn); ok {
 			tcpConn.CloseWrite()
+		}
+	}()
+
+	wg.Wait()
+	return totalBytes.Load()
+}
+
+type bandwidthLimitedWriter struct {
+	w         io.Writer
+	remaining *atomic.Int64
+	onLimit   func()
+}
+
+func (lw *bandwidthLimitedWriter) Write(p []byte) (int, error) {
+	writtenTotal := 0
+	for len(p) > 0 {
+		rem := lw.remaining.Load()
+		if rem <= 0 {
+			if lw.onLimit != nil {
+				lw.onLimit()
+			}
+			if writtenTotal > 0 {
+				return writtenTotal, errBandwidthLimitExceeded
+			}
+			return 0, errBandwidthLimitExceeded
+		}
+
+		toWrite := int64(len(p))
+		if toWrite > rem {
+			toWrite = rem
+		}
+
+		n, err := lw.w.Write(p[:toWrite])
+		if n > 0 {
+			lw.remaining.Add(-int64(n))
+			p = p[n:]
+			writtenTotal += n
+		}
+		if err != nil {
+			return writtenTotal, err
+		}
+		if int64(n) < toWrite {
+			return writtenTotal, io.ErrShortWrite
+		}
+		if toWrite == rem {
+			if lw.onLimit != nil {
+				lw.onLimit()
+			}
+			return writtenTotal, errBandwidthLimitExceeded
+		}
+	}
+	return writtenTotal, nil
+}
+
+func copyBidirectionalWithReaderLimited(client net.Conn, stream net.Conn, streamReader *bufio.Reader, remaining *atomic.Int64) int64 {
+	var wg sync.WaitGroup
+	var totalBytes atomic.Int64
+	var closeOnce sync.Once
+
+	closeAll := func() {
+		closeOnce.Do(func() {
+			_ = client.Close()
+			_ = stream.Close()
+		})
+	}
+
+	// Stream (via reader) -> Client
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		lw := &bandwidthLimitedWriter{w: client, remaining: remaining, onLimit: closeAll}
+		n, err := io.Copy(lw, streamReader)
+		totalBytes.Add(n)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, errBandwidthLimitExceeded) {
+			log.Printf("Error copying stream->client: %v", err)
+		}
+		if errors.Is(err, errBandwidthLimitExceeded) {
+			closeAll()
+		}
+		// Signal EOF to client
+		if tcpConn, ok := client.(*net.TCPConn); ok {
+			_ = tcpConn.CloseWrite()
+		}
+	}()
+
+	// Client -> Stream
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		lw := &bandwidthLimitedWriter{w: stream, remaining: remaining, onLimit: closeAll}
+		n, err := io.Copy(lw, client)
+		totalBytes.Add(n)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, errBandwidthLimitExceeded) {
+			log.Printf("Error copying client->stream: %v", err)
+		}
+		if errors.Is(err, errBandwidthLimitExceeded) {
+			closeAll()
+		}
+		// Signal EOF to stream
+		if tcpConn, ok := stream.(*net.TCPConn); ok {
+			_ = tcpConn.CloseWrite()
+		}
+	}()
+
+	wg.Wait()
+	return totalBytes.Load()
+}
+
+type bandwidthChargingWriter struct {
+	w       io.Writer
+	consume func(bytes int64) (bool, error)
+	onLimit func()
+}
+
+func (cw *bandwidthChargingWriter) Write(p []byte) (int, error) {
+	if cw.consume == nil {
+		return cw.w.Write(p)
+	}
+	const maxChunk = 32 * 1024
+	writtenTotal := 0
+	for len(p) > 0 {
+		chunk := p
+		if len(chunk) > maxChunk {
+			chunk = p[:maxChunk]
+		}
+		allowed, err := cw.consume(int64(len(chunk)))
+		if err != nil {
+			return writtenTotal, err
+		}
+		if !allowed {
+			if cw.onLimit != nil {
+				cw.onLimit()
+			}
+			if writtenTotal > 0 {
+				return writtenTotal, errBandwidthLimitExceeded
+			}
+			return 0, errBandwidthLimitExceeded
+		}
+		n, err := cw.w.Write(chunk)
+		if n > 0 {
+			writtenTotal += n
+			p = p[n:]
+		}
+		if err != nil {
+			return writtenTotal, err
+		}
+		if n < len(chunk) {
+			return writtenTotal, io.ErrShortWrite
+		}
+	}
+	return writtenTotal, nil
+}
+
+func copyBidirectionalWithReaderCharging(client net.Conn, stream net.Conn, streamReader *bufio.Reader, consume func(bytes int64) (bool, error)) int64 {
+	var wg sync.WaitGroup
+	var totalBytes atomic.Int64
+	var closeOnce sync.Once
+
+	closeAll := func() {
+		closeOnce.Do(func() {
+			_ = client.Close()
+			_ = stream.Close()
+		})
+	}
+
+	// Stream (via reader) -> Client
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		cw := &bandwidthChargingWriter{w: client, consume: consume, onLimit: closeAll}
+		n, err := io.Copy(cw, streamReader)
+		totalBytes.Add(n)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, errBandwidthLimitExceeded) {
+			log.Printf("Error copying stream->client: %v", err)
+		}
+		if errors.Is(err, errBandwidthLimitExceeded) {
+			closeAll()
+		}
+		if tcpConn, ok := client.(*net.TCPConn); ok {
+			_ = tcpConn.CloseWrite()
+		}
+	}()
+
+	// Client -> Stream
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		cw := &bandwidthChargingWriter{w: stream, consume: consume, onLimit: closeAll}
+		n, err := io.Copy(cw, client)
+		totalBytes.Add(n)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) && !errors.Is(err, errBandwidthLimitExceeded) {
+			log.Printf("Error copying client->stream: %v", err)
+		}
+		if errors.Is(err, errBandwidthLimitExceeded) {
+			closeAll()
+		}
+		if tcpConn, ok := stream.(*net.TCPConn); ok {
+			_ = tcpConn.CloseWrite()
 		}
 	}()
 
