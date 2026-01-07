@@ -541,109 +541,73 @@ func (i *Ingress) proxyToTunnel(c *gin.Context, host string) {
 	// Note: bandwidth is consumed during streaming; we don't need to count response bytes here.
 
 	if isUpgrade {
-		// For upgrade requests, use a peekable reader to avoid consuming WebSocket frames
-		peekReader := bufio.NewReader(stream)
-
-		// Peek at enough bytes to read the status line and headers (8KB should be sufficient)
-		peeked, err := peekReader.Peek(8192)
-		if err != nil && err != io.EOF && err != bufio.ErrBufferFull {
-			sentry.CaptureErrorWithContext(c, err, "Failed to peek response")
+		// For Upgrade requests (WebSocket, h2c, etc.) we must not parse or rewrite the
+		// upstream response/body because that can corrupt framing. Instead, we hijack
+		// the client connection and tunnel raw bytes bidirectionally.
+		hijacker, ok := c.Writer.(http.Hijacker)
+		if !ok {
+			sentry.CaptureErrorWithContext(c, errors.New("response writer doesn't support hijacking"), "Cannot hijack connection for upgrade")
 			c.Status(http.StatusBadGateway)
 			return
 		}
 
-		// Parse just the status line from peeked data to check for 101
-		peekResp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(peeked)), c.Request)
+		clientConn, rw, err := hijacker.Hijack()
 		if err != nil {
-			sentry.CaptureErrorWithContext(c, err, "Failed to parse peeked response")
+			sentry.CaptureErrorWithContext(c, err, "Failed to hijack connection")
 			c.Status(http.StatusBadGateway)
 			return
 		}
-		peekResp.Body.Close()
+		defer clientConn.Close()
 
-		if peekResp.StatusCode == http.StatusSwitchingProtocols {
-			// This is a successful upgrade (101 Switching Protocols)
-			// Re-read the response properly to consume headers from peekReader
-			actualResp, err := http.ReadResponse(peekReader, c.Request)
-			if err != nil {
-				sentry.CaptureErrorWithContext(c, err, "Failed to read upgrade response")
-				c.Status(http.StatusBadGateway)
-				return
-			}
-
-			// Copy response headers to client
-			for k, vv := range actualResp.Header {
-				for _, v := range vv {
-					c.Writer.Header().Add(k, v)
-				}
-			}
-
-			// Write the 101 status
-			c.Status(http.StatusSwitchingProtocols)
-
-			// Flush headers to client immediately
-			if flusher, ok := c.Writer.(http.Flusher); ok {
-				flusher.Flush()
-			}
-
-			// Hijack the connection to get raw access
-			hijacker, ok := c.Writer.(http.Hijacker)
-			if !ok {
-				sentry.CaptureErrorWithContext(c, errors.New("response writer doesn't support hijacking"), "Cannot hijack connection for upgrade")
-				return
-			}
-
-			clientConn, _, err := hijacker.Hijack()
-			if err != nil {
-				sentry.CaptureErrorWithContext(c, err, "Failed to hijack connection")
-				return
-			}
-			defer clientConn.Close()
-
-			// Now do bidirectional copy between clientConn and stream (via peekReader)
-			_ = copyBidirectionalWithReaderCharging(clientConn, stream, peekReader, func(b int64) (bool, error) {
-				allowed, err := consume(b)
-				if !allowed {
-					i.maybeNotifyBandwidthExceeded(entry)
-				}
-				return allowed, err
-			})
-		} else {
-			// Upgrade failed (non-101 response), handle as normal HTTP
-			// Re-read response properly from peekReader
-			resp, err := http.ReadResponse(peekReader, c.Request)
-			if err != nil {
-				sentry.CaptureErrorWithContext(c, err, "Failed to read response from stream")
-				c.Status(http.StatusBadGateway)
-				return
-			}
-			defer resp.Body.Close()
-
-			// Copy headers
-			for k, vv := range resp.Header {
-				for _, v := range vv {
-					c.Writer.Header().Add(k, v)
-				}
-			}
-
-			// Write status and body
-			c.Status(resp.StatusCode)
-			closeOnce := sync.Once{}
-			closeUpstream := func() {
-				closeOnce.Do(func() {
-					_ = resp.Body.Close()
-					_ = stream.Close()
-				})
-			}
-			cw := &bandwidthChargingWriter{w: c.Writer, consume: func(b int64) (bool, error) {
-				allowed, err := consume(b)
-				if !allowed {
-					i.maybeNotifyBandwidthExceeded(entry)
-				}
-				return allowed, err
-			}, onLimit: closeUpstream}
-			_, _ = io.Copy(cw, resp.Body)
+		// Ensure any buffered data from the HTTP server is flushed.
+		if rw != nil {
+			_ = rw.Writer.Flush()
 		}
+
+		closeOnce := sync.Once{}
+		closeAll := func() {
+			closeOnce.Do(func() {
+				_ = clientConn.Close()
+				_ = stream.Close()
+			})
+		}
+
+		// Stream -> Client
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			cw := &bandwidthChargingWriter{w: clientConn, consume: func(b int64) (bool, error) {
+				allowed, err := consume(b)
+				if !allowed {
+					i.maybeNotifyBandwidthExceeded(entry)
+				}
+				return allowed, err
+			}, onLimit: closeAll}
+			_, _ = io.Copy(cw, bufio.NewReader(stream))
+			closeAll()
+		}()
+
+		// Client -> Stream (use rw.Reader to include any buffered bytes)
+		go func() {
+			defer wg.Done()
+			clientReader := io.Reader(clientConn)
+			if rw != nil {
+				clientReader = rw.Reader
+			}
+			cw := &bandwidthChargingWriter{w: stream, consume: func(b int64) (bool, error) {
+				allowed, err := consume(b)
+				if !allowed {
+					i.maybeNotifyBandwidthExceeded(entry)
+				}
+				return allowed, err
+			}, onLimit: closeAll}
+			_, _ = io.Copy(cw, clientReader)
+			closeAll()
+		}()
+
+		wg.Wait()
+		return
 	} else {
 		// Normal HTTP request/response - existing behavior
 		resp, err := http.ReadResponse(bufio.NewReader(stream), c.Request)
