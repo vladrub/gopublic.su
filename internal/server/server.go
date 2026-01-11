@@ -1,13 +1,18 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,11 +28,13 @@ import (
 // Server manages the control plane for tunnel connections.
 // It handles client authentication, domain binding, and session management.
 type Server struct {
-	Registry     *TunnelRegistry
-	UserSessions *UserSessionRegistry // Tracks active sessions per user
-	Port         string
-	TLSConfig    *tls.Config
-	RootDomain   string // Root domain for FQDN generation
+	Registry      *TunnelRegistry
+	UserSessions  *UserSessionRegistry // Tracks active sessions per user
+	Port          string
+	TLSConfig     *tls.Config
+	RootDomain    string // Root domain for FQDN generation
+	IngressScheme string
+	BotToken      string
 
 	listener net.Listener
 	wg       sync.WaitGroup
@@ -49,11 +56,18 @@ type Server struct {
 func NewServerWithConfig(cfg *config.Config, registry *TunnelRegistry, tlsConfig *tls.Config) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
-		Registry:            registry,
-		UserSessions:        NewUserSessionRegistry(),
-		Port:                cfg.ControlPlanePort,
-		TLSConfig:           tlsConfig,
-		RootDomain:          cfg.Domain,
+		Registry:     registry,
+		UserSessions: NewUserSessionRegistry(),
+		Port:         cfg.ControlPlanePort,
+		TLSConfig:    tlsConfig,
+		RootDomain:   cfg.Domain,
+		IngressScheme: func() string {
+			if cfg.IsSecure() {
+				return "https"
+			}
+			return "http"
+		}(),
+		BotToken:            cfg.TelegramBotToken,
 		ctx:                 ctx,
 		cancel:              cancel,
 		MaxConnections:      cfg.MaxConnections,
@@ -71,6 +85,8 @@ func NewServer(port string, registry *TunnelRegistry, tlsConfig *tls.Config) *Se
 		Port:           port,
 		TLSConfig:      tlsConfig,
 		RootDomain:     os.Getenv("DOMAIN_NAME"), // Fallback for backward compat
+		IngressScheme:  "https",
+		BotToken:       os.Getenv("TELEGRAM_BOT_TOKEN"),
 		ctx:            ctx,
 		cancel:         cancel,
 		MaxConnections: 1000,
@@ -252,6 +268,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		sentry.CaptureErrorf(err, "Failed to send success response to %s", conn.RemoteAddr())
 	}
 	log.Printf("Handshake complete for %s. Bound domains: %v", conn.RemoteAddr(), boundDomains)
+	s.notifyTunnelCreated(user, boundDomains)
 
 	// 7. Monitor session for cleanup
 	s.monitorSession(session, user.ID, boundDomains)
@@ -410,6 +427,55 @@ func (s *Server) monitorSession(session *yamux.Session, userID uint, boundDomain
 			s.Registry.Unregister(d)
 		}
 		s.UserSessions.Unregister(userID)
+	}()
+}
+
+func (s *Server) notifyTunnelCreated(user *models.User, boundDomains []string) {
+	if s.AdminTelegramID == 0 || s.BotToken == "" || user == nil || len(boundDomains) == 0 {
+		return
+	}
+
+	scheme := s.IngressScheme
+	if scheme == "" {
+		scheme = "https"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("🔌 Новый туннель\n")
+	sb.WriteString("ID: ")
+	sb.WriteString(strconv.FormatUint(uint64(user.ID), 10))
+	if user.Username != "" {
+		sb.WriteString("\nUsername: ")
+		sb.WriteString(user.Username)
+	}
+	if user.Email != "" {
+		sb.WriteString("\nEmail: ")
+		sb.WriteString(user.Email)
+	}
+	sb.WriteString("\nСсылки:")
+	for _, d := range boundDomains {
+		link := d
+		if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
+			link = scheme + "://" + link
+		}
+		sb.WriteString("\n")
+		sb.WriteString(link)
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.BotToken)
+	payload := map[string]interface{}{
+		"chat_id": s.AdminTelegramID,
+		"text":    sb.String(),
+	}
+
+	go func() {
+		jsonData, _ := json.Marshal(payload)
+		resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Printf("Failed to send Telegram notification: %v", err)
+			return
+		}
+		defer resp.Body.Close()
 	}()
 }
 

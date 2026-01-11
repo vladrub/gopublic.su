@@ -75,3 +75,14 @@ func (r *UserSessionRegistry) Unregister(userID uint) {
 	defer r.mu.Unlock()
 	delete(r.sessions, userID)
 }
+
+// DisconnectUser closes the active session for a user, if any.
+func (r *UserSessionRegistry) DisconnectUser(userID uint) {
+	r.mu.RLock()
+	sess, ok := r.sessions[userID]
+	r.mu.RUnlock()
+	if !ok || sess == nil || sess.Session == nil {
+		return
+	}
+	_ = sess.Session.Close()
+}

@@ -239,7 +239,48 @@ func (s *SQLiteStore) ValidateDomainOwnership(domainName string, userID uint) (b
 }
 
 func (s *SQLiteStore) CreateDomain(domain *models.Domain) error {
-	return s.db.Create(domain).Error
+	if err := s.db.Create(domain).Error; err != nil {
+		return mapDuplicateErr(err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) DeleteDomain(userID uint, domainName string) error {
+	result := s.db.Where("name = ? AND user_id = ?", domainName, userID).Delete(&models.Domain{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *SQLiteStore) RenameDomain(userID uint, oldName, newName string) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var domain models.Domain
+		if err := tx.Where("name = ? AND user_id = ?", oldName, userID).First(&domain).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
+			return err
+		}
+
+		if err := tx.Model(&domain).Update("name", newName).Error; err != nil {
+			return mapDuplicateErr(err)
+		}
+		return nil
+	})
+}
+
+func mapDuplicateErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "unique constraint failed") {
+		return ErrDuplicateKey
+	}
+	return err
 }
 
 // --- Abuse Report Operations ---
@@ -363,14 +404,14 @@ func (s *SQLiteStore) GetUserTotalBandwidth(userID uint) (int64, error) {
 
 // UserStats holds user information with bandwidth statistics
 type UserStats struct {
-	UserID       uint
-	TelegramID   *int64
-	YandexID     *string
-	Email        string
-	Username     string
-	FirstName    string
-	LastName     string
-	BytesUsed    int64
+	UserID     uint
+	TelegramID *int64
+	YandexID   *string
+	Email      string
+	Username   string
+	FirstName  string
+	LastName   string
+	BytesUsed  int64
 }
 
 // GetTotalUserCount returns the total number of registered users
@@ -537,6 +578,33 @@ func GetUserDomains(userID uint) ([]models.Domain, error) {
 		return nil, ErrDBError
 	}
 	return (&SQLiteStore{db: DB}).GetUserDomains(userID)
+}
+
+// CreateDomain creates a domain using the global DB.
+// Deprecated: Use SQLiteStore.CreateDomain instead.
+func CreateDomain(domain *models.Domain) error {
+	if DB == nil {
+		return ErrDBError
+	}
+	return (&SQLiteStore{db: DB}).CreateDomain(domain)
+}
+
+// DeleteDomain deletes a domain using the global DB.
+// Deprecated: Use SQLiteStore.DeleteDomain instead.
+func DeleteDomain(userID uint, domainName string) error {
+	if DB == nil {
+		return ErrDBError
+	}
+	return (&SQLiteStore{db: DB}).DeleteDomain(userID, domainName)
+}
+
+// RenameDomain renames a domain using the global DB.
+// Deprecated: Use SQLiteStore.RenameDomain instead.
+func RenameDomain(userID uint, oldName, newName string) error {
+	if DB == nil {
+		return ErrDBError
+	}
+	return (&SQLiteStore{db: DB}).RenameDomain(userID, oldName, newName)
 }
 
 // CreateUserWithTokenAndDomains creates user with token and domains using the global DB.

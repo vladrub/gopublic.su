@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"os"
 	"strconv"
+	"strings"
 
 	apperrors "gopublic/internal/errors"
 )
@@ -50,6 +51,10 @@ type Config struct {
 	// Session keys (32 bytes each)
 	SessionHashKey  []byte
 	SessionBlockKey []byte
+
+	// Access control (optional)
+	AllowedTelegramIDs []int64
+	AllowedYandexIDs   []string
 }
 
 // Configuration errors
@@ -57,6 +62,7 @@ var (
 	ErrMissingDomain      = apperrors.New(apperrors.CodeConfigError, "DOMAIN_NAME is required in production mode")
 	ErrMissingSessionKeys = apperrors.New(apperrors.CodeConfigError, "SESSION_HASH_KEY and SESSION_BLOCK_KEY are required in production mode")
 	ErrInvalidSessionKey  = apperrors.New(apperrors.CodeConfigError, "session key must be 32 bytes hex-encoded")
+	ErrInvalidAllowedIDs  = apperrors.New(apperrors.CodeConfigError, "invalid allowed IDs format")
 )
 
 // LoadFromEnv loads configuration from environment variables
@@ -114,6 +120,14 @@ func LoadFromEnv() (*Config, error) {
 		DomainsPerUser:        domainsPerUser,
 		DailyBandwidthLimit:   dailyBandwidthLimit,
 	}
+
+	telegramIDs, err := parseAllowedTelegramIDs(os.Getenv("ALLOWED_TELEGRAM_IDS"))
+	if err != nil {
+		return nil, ErrInvalidAllowedIDs
+	}
+	yandexIDs := parseAllowedYandexIDs(os.Getenv("ALLOWED_YANDEX_IDS"))
+	cfg.AllowedTelegramIDs = telegramIDs
+	cfg.AllowedYandexIDs = yandexIDs
 
 	// Parse session keys
 	if hashKeyHex := os.Getenv("SESSION_HASH_KEY"); hashKeyHex != "" {
@@ -201,4 +215,40 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func parseAllowedTelegramIDs(raw string) ([]int64, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(part, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func parseAllowedYandexIDs(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		ids = append(ids, part)
+	}
+	return ids
 }

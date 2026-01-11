@@ -1,1561 +1,2028 @@
 <!DOCTYPE html>
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Панель управления — GoPublic</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        :root {
-            --lumon-teal: #0d7377;
-            --lumon-teal-light: #14919b;
-            --lumon-mint: #a8dadc;
-            --lumon-mint-pale: #d4ecec;
-            --bg-cream: #f5f5dc;
-            --bg-paper: #faf9f6;
-            --bg-card: #ffffff;
-            --text-primary: #1a1a2e;
-            --text-secondary: #4a4a5a;
-            --text-muted: #7a7a8a;
-            --border-light: #d1d5db;
-            --shadow-soft: 0 2px 8px rgba(13, 115, 119, 0.08);
-            --shadow-card: 0 8px 32px rgba(26, 26, 46, 0.08);
-            --font-primary: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
-        }
+      :root {
+        --lumon-teal: #0d7377;
+        --lumon-teal-light: #14919b;
+        --lumon-mint: #a8dadc;
+        --lumon-mint-pale: #d4ecec;
+        --bg-cream: #f5f5dc;
+        --bg-paper: #faf9f6;
+        --bg-card: #ffffff;
+        --text-primary: #1a1a2e;
+        --text-secondary: #4a4a5a;
+        --text-muted: #7a7a8a;
+        --border-light: #d1d5db;
+        --shadow-soft: 0 2px 8px rgba(13, 115, 119, 0.08);
+        --shadow-card: 0 8px 32px rgba(26, 26, 46, 0.08);
+        --font-primary: "IBM Plex Sans", -apple-system, BlinkMacSystemFont,
+          sans-serif;
+        --font-mono: "IBM Plex Mono", "Courier New", monospace;
+      }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-        body {
-            font-family: var(--font-primary);
-            background-color: var(--bg-cream);
-            min-height: 100vh;
-            color: var(--text-primary);
-            line-height: 1.6;
-        }
+      body {
+        font-family: var(--font-primary);
+        background-color: var(--bg-cream);
+        min-height: 100vh;
+        color: var(--text-primary);
+        line-height: 1.6;
+      }
 
-        /* Header */
+      /* Header */
+      .header {
+        background: var(--bg-card);
+        border-bottom: 1px solid var(--border-light);
+        padding: 1rem 2rem;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .header-inner {
+        max-width: 900px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .header-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .header-icon {
+        width: 10px;
+        height: 10px;
+        background: linear-gradient(
+          135deg,
+          var(--lumon-teal),
+          var(--lumon-teal-light)
+        );
+        border-radius: 2px;
+        transform: rotate(45deg);
+      }
+
+      .header-title {
+        font-size: 1rem;
+        font-weight: 400;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--lumon-teal);
+      }
+
+      .header-user {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+      }
+
+      .user-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+      }
+
+      .user-avatar {
+        width: 32px;
+        height: 32px;
+        background: var(--lumon-mint-pale);
+        border: 1px solid var(--lumon-mint);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--lumon-teal);
+        text-transform: uppercase;
+        overflow: hidden;
+      }
+
+      .user-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .logout-link {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-light);
+        border-radius: 4px;
+        transition: all 0.25s ease;
+      }
+
+      .logout-link:hover {
+        color: var(--lumon-teal);
+        border-color: var(--lumon-teal);
+      }
+
+      /* Main Content */
+      .main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2.5rem 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      /* Cards */
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        box-shadow: var(--shadow-card);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 60px;
+        height: 4px;
+        background: linear-gradient(
+          90deg,
+          var(--lumon-teal),
+          var(--lumon-teal-light)
+        );
+        border-radius: 0 0 4px 0;
+      }
+
+      .card-header {
+        padding: 1.5rem 1.5rem 0;
+      }
+
+      .card-label {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .card-label::before {
+        content: "";
+        width: 4px;
+        height: 4px;
+        background: var(--lumon-mint);
+        border-radius: 50%;
+      }
+
+      .card-body {
+        padding: 1.25rem 1.5rem 1.5rem;
+      }
+
+      .copy-btn {
+        font-family: var(--font-primary);
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--lumon-teal);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.25rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        white-space: nowrap;
+      }
+
+      .copy-btn:hover {
+        background: var(--lumon-teal-light);
+      }
+
+      .copy-btn.copied {
+        background: #4a7c59;
+      }
+
+      /* Code block with copy icon */
+      .code-block {
+        position: relative;
+      }
+
+      .code-block .config-example {
+        margin-bottom: 0;
+        padding-right: 2.5rem;
+      }
+
+      .copy-icon-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background: transparent;
+        border: none;
+        padding: 0.4rem;
+        cursor: pointer;
+        opacity: 0.4;
+        transition: all 0.2s ease;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .copy-icon-btn svg {
+        width: 16px;
+        height: 16px;
+        color: var(--text-muted);
+        transition: color 0.2s ease;
+      }
+
+      .copy-icon-btn:hover {
+        opacity: 1;
+        background: var(--lumon-mint-pale);
+      }
+
+      .copy-icon-btn:hover svg {
+        color: var(--lumon-teal);
+      }
+
+      .copy-icon-btn.copied {
+        opacity: 1;
+      }
+
+      .copy-icon-btn.copied svg {
+        color: #4a7c59;
+      }
+
+      .code-block:hover .copy-icon-btn {
+        opacity: 1;
+      }
+
+      /* Tooltip for copy button */
+      .copy-icon-btn::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 0.25rem;
+        background: var(--text-primary);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.6875rem;
+        font-family: var(--font-primary);
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      .copy-icon-btn.copied::after {
+        opacity: 1;
+      }
+
+      /* Token display with inline copy */
+      .token-display-inline {
+        display: flex;
+        align-items: stretch;
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        border-radius: 4px;
+        margin-bottom: 1rem;
+        overflow: hidden;
+      }
+
+      .token-display-inline .token-value {
+        flex: 1;
+        font-family: var(--font-mono);
+        font-size: 0.875rem;
+        padding: 0.875rem 1rem;
+        color: var(--text-primary);
+        word-break: break-all;
+        background: transparent;
+        border: none;
+      }
+
+      .token-display-inline .copy-icon-btn {
+        position: relative;
+        top: auto;
+        right: auto;
+        opacity: 0.6;
+        padding: 0.875rem;
+        border-radius: 0;
+        border-left: 1px solid var(--border-light);
+      }
+
+      .token-display-inline .copy-icon-btn:hover {
+        opacity: 1;
+        background: var(--lumon-mint-pale);
+      }
+
+      .token-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      .regenerate-btn {
+        font-family: var(--font-primary);
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        background: transparent;
+        border: 1px solid var(--border-light);
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .regenerate-btn:hover {
+        color: #c53030;
+        border-color: #c53030;
+      }
+
+      .regenerate-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .regenerate-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .token-instructions {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+      }
+
+      .token-instructions code {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        background: var(--lumon-mint-pale);
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        color: var(--lumon-teal);
+      }
+
+      /* Domain List */
+      .domain-list {
+        list-style: none;
+      }
+
+      .domain-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--border-light);
+      }
+
+      .domain-item:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+
+      .domain-item:first-child {
+        padding-top: 0;
+      }
+
+      .domain-number {
+        width: 28px;
+        height: 28px;
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-right: 1rem;
+        flex-shrink: 0;
+      }
+
+      .domain-name {
+        flex: 1;
+        font-family: var(--font-mono);
+        font-size: 0.9375rem;
+        color: var(--text-primary);
+      }
+
+      .domain-actions {
+        display: inline-flex;
+        gap: 0.5rem;
+        margin-left: auto;
+      }
+
+      .domain-create {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+
+      .domain-input {
+        flex: 1 1 200px;
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        color: var(--text-primary);
+        border-radius: 8px;
+        padding: 0.65rem 0.85rem;
+        font-size: 0.9rem;
+      }
+
+      .domain-input::placeholder {
+        color: var(--text-muted);
+      }
+
+      .domain-create-btn {
+        border: none;
+        background: var(--accent-color);
+        color: #0d0d10;
+        border-radius: 999px;
+        padding: 0.65rem 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .domain-create-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+      }
+
+      .domain-help {
+        flex-basis: 100%;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+      }
+
+      .domain-link,
+      .domain-action-btn {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--lumon-teal);
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--lumon-teal);
+        border-radius: 4px;
+        transition: all 0.25s ease;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .domain-link:hover,
+      .domain-action-btn:hover {
+        background: var(--lumon-teal);
+        color: white;
+      }
+
+      /* Install */
+      .install-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        margin-top: 1rem;
+      }
+
+      .install-block {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .install-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .install-hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+      }
+
+      /* Empty state */
+      .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+      }
+
+      /* Config Section */
+      .config-description {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+      }
+
+      .config-example {
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        border-radius: 4px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        overflow-x: auto;
+      }
+
+      .config-example code {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+        color: var(--text-primary);
+        white-space: pre;
+      }
+
+      .config-instructions {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+      }
+
+      .config-instructions code {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        background: var(--lumon-mint-pale);
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        color: var(--lumon-teal);
+      }
+
+      /* Linked Accounts */
+      .linked-accounts {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .account-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.875rem 1rem;
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+      }
+
+      .account-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .account-icon svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .account-icon.telegram {
+        background: transparent;
+      }
+
+      .account-icon.yandex {
+        background: transparent;
+      }
+
+      .account-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+      }
+
+      .account-name {
+        font-weight: 500;
+        color: var(--text-primary);
+        font-size: 0.9375rem;
+      }
+
+      .account-status {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .account-status.linked {
+        color: #4a7c59;
+      }
+
+      .link-btn {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--lumon-teal);
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--lumon-teal);
+        border-radius: 4px;
+        transition: all 0.25s ease;
+        white-space: nowrap;
+      }
+
+      .link-btn:hover {
+        background: var(--lumon-teal);
+        color: white;
+      }
+
+      /* Stats Section */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+      }
+
+      .stat-item {
+        text-align: center;
+        padding: 1rem;
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+      }
+
+      .stat-value {
+        font-family: var(--font-mono);
+        font-size: 1.5rem;
+        font-weight: 500;
+        color: var(--lumon-teal);
+      }
+
+      .stat-label {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        margin-top: 0.25rem;
+      }
+
+      .stat-limit {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+      }
+
+      .progress-bar {
+        height: 4px;
+        background: var(--border-light);
+        border-radius: 2px;
+        margin-top: 0.75rem;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          var(--lumon-teal),
+          var(--lumon-teal-light)
+        );
+        border-radius: 2px;
+        transition: width 0.3s ease;
+      }
+
+      @media (max-width: 500px) {
+        .stats-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Download Section */
+      .download-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+      }
+
+      .download-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem 0.75rem;
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        border-radius: 6px;
+        text-decoration: none;
+        color: var(--text-primary);
+        transition: all 0.25s ease;
+      }
+
+      .download-btn:hover {
+        border-color: var(--lumon-teal);
+        background: var(--lumon-mint-pale);
+      }
+
+      .download-btn:hover .download-icon svg {
+        color: var(--lumon-teal);
+      }
+
+      .download-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .download-icon svg {
+        width: 24px;
+        height: 24px;
+        color: var(--text-muted);
+        transition: color 0.25s ease;
+      }
+
+      .download-label {
+        font-size: 0.6875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        text-align: center;
+      }
+
+      @media (max-width: 500px) {
+        .download-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .download-note {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 1rem;
+        text-align: center;
+      }
+
+      .download-note code {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        background: var(--lumon-mint-pale);
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        color: var(--lumon-teal);
+      }
+
+      /* Footer */
+      .footer {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 2rem 2rem;
+        text-align: center;
+      }
+
+      .footer-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+      }
+
+      .footer-text {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        text-transform: uppercase;
+      }
+
+      .footer-separator {
+        width: 20px;
+        height: 1px;
+        background: var(--border-light);
+      }
+
+      .footer-link {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 0.2s ease;
+      }
+
+      .footer-link:hover {
+        color: var(--lumon-teal);
+      }
+
+      /* Responsive */
+      @media (max-width: 640px) {
         .header {
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border-light);
-            padding: 1rem 2rem;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+          padding: 1rem;
         }
 
         .header-inner {
-            max-width: 900px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+          flex-direction: column;
+          gap: 1rem;
         }
 
-        .header-brand {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .header-icon {
-            width: 10px;
-            height: 10px;
-            background: linear-gradient(135deg, var(--lumon-teal), var(--lumon-teal-light));
-            border-radius: 2px;
-            transform: rotate(45deg);
-        }
-
-        .header-title {
-            font-size: 1rem;
-            font-weight: 400;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: var(--lumon-teal);
-        }
-
-        .header-user {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-        }
-
-        .user-badge {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            background: var(--lumon-mint-pale);
-            border: 1px solid var(--lumon-mint);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--lumon-teal);
-            text-transform: uppercase;
-            overflow: hidden;
-        }
-
-        .user-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .logout-link {
-            font-size: 0.75rem;
-            font-weight: 500;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--border-light);
-            border-radius: 4px;
-            transition: all 0.25s ease;
-        }
-
-        .logout-link:hover {
-            color: var(--lumon-teal);
-            border-color: var(--lumon-teal);
-        }
-
-        /* Main Content */
         .main {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 2.5rem 2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 2rem;
-        }
-
-        /* Cards */
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-light);
-            border-radius: 8px;
-            box-shadow: var(--shadow-card);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 60px;
-            height: 4px;
-            background: linear-gradient(90deg, var(--lumon-teal), var(--lumon-teal-light));
-            border-radius: 0 0 4px 0;
-        }
-
-        .card-header {
-            padding: 1.5rem 1.5rem 0;
-        }
-
-        .card-label {
-            font-size: 0.6875rem;
-            font-weight: 600;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .card-label::before {
-            content: '';
-            width: 4px;
-            height: 4px;
-            background: var(--lumon-mint);
-            border-radius: 50%;
+          padding: 1.5rem 1rem;
         }
 
         .card-body {
-            padding: 1.25rem 1.5rem 1.5rem;
+          padding: 1rem;
+        }
+
+        .token-display {
+          flex-direction: column;
+          align-items: stretch;
         }
 
         .copy-btn {
-            font-family: var(--font-primary);
-            font-size: 0.75rem;
-            font-weight: 500;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            background: var(--lumon-teal);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.25rem;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            white-space: nowrap;
-        }
-
-        .copy-btn:hover {
-            background: var(--lumon-teal-light);
-        }
-
-        .copy-btn.copied {
-            background: #4a7c59;
-        }
-
-        /* Code block with copy icon */
-        .code-block {
-            position: relative;
-        }
-
-        .code-block .config-example {
-            margin-bottom: 0;
-            padding-right: 2.5rem;
-        }
-
-        .copy-icon-btn {
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            background: transparent;
-            border: none;
-            padding: 0.4rem;
-            cursor: pointer;
-            opacity: 0.4;
-            transition: all 0.2s ease;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .copy-icon-btn svg {
-            width: 16px;
-            height: 16px;
-            color: var(--text-muted);
-            transition: color 0.2s ease;
-        }
-
-        .copy-icon-btn:hover {
-            opacity: 1;
-            background: var(--lumon-mint-pale);
-        }
-
-        .copy-icon-btn:hover svg {
-            color: var(--lumon-teal);
-        }
-
-        .copy-icon-btn.copied {
-            opacity: 1;
-        }
-
-        .copy-icon-btn.copied svg {
-            color: #4a7c59;
-        }
-
-        .code-block:hover .copy-icon-btn {
-            opacity: 1;
-        }
-
-        /* Tooltip for copy button */
-        .copy-icon-btn::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            right: 0;
-            margin-bottom: 0.25rem;
-            background: var(--text-primary);
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.6875rem;
-            font-family: var(--font-primary);
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-        }
-
-        .copy-icon-btn.copied::after {
-            opacity: 1;
-        }
-
-        /* Token display with inline copy */
-        .token-display-inline {
-            display: flex;
-            align-items: stretch;
-            background: var(--bg-paper);
-            border: 1px solid var(--border-light);
-            border-radius: 4px;
-            margin-bottom: 1rem;
-            overflow: hidden;
-        }
-
-        .token-display-inline .token-value {
-            flex: 1;
-            font-family: var(--font-mono);
-            font-size: 0.875rem;
-            padding: 0.875rem 1rem;
-            color: var(--text-primary);
-            word-break: break-all;
-            background: transparent;
-            border: none;
-        }
-
-        .token-display-inline .copy-icon-btn {
-            position: relative;
-            top: auto;
-            right: auto;
-            opacity: 0.6;
-            padding: 0.875rem;
-            border-radius: 0;
-            border-left: 1px solid var(--border-light);
-        }
-
-        .token-display-inline .copy-icon-btn:hover {
-            opacity: 1;
-            background: var(--lumon-mint-pale);
-        }
-
-        .token-actions {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-top: 1rem;
-        }
-
-        .regenerate-btn {
-            font-family: var(--font-primary);
-            font-size: 0.75rem;
-            font-weight: 500;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            background: transparent;
-            border: 1px solid var(--border-light);
-            padding: 0.5rem 0.75rem;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.25s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-        }
-
-        .regenerate-btn:hover {
-            color: #c53030;
-            border-color: #c53030;
-        }
-
-        .regenerate-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .regenerate-btn svg {
-            width: 14px;
-            height: 14px;
-        }
-
-        .token-instructions {
-            font-size: 0.8125rem;
-            color: var(--text-secondary);
-        }
-
-        .token-instructions code {
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            background: var(--lumon-mint-pale);
-            padding: 0.25rem 0.5rem;
-            border-radius: 3px;
-            color: var(--lumon-teal);
-        }
-
-        /* Domain List */
-        .domain-list {
-            list-style: none;
+          width: 100%;
         }
 
         .domain-item {
-            display: flex;
-            align-items: center;
-            padding: 1rem 0;
-            border-bottom: 1px solid var(--border-light);
-        }
-
-        .domain-item:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .domain-item:first-child {
-            padding-top: 0;
-        }
-
-        .domain-number {
-            width: 28px;
-            height: 28px;
-            background: var(--bg-paper);
-            border: 1px solid var(--border-light);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            margin-right: 1rem;
-            flex-shrink: 0;
+          flex-wrap: wrap;
+          gap: 0.75rem;
         }
 
         .domain-name {
-            flex: 1;
-            font-family: var(--font-mono);
-            font-size: 0.9375rem;
-            color: var(--text-primary);
+          width: 100%;
+          order: 2;
+          padding-left: 44px;
         }
 
         .domain-link {
-            font-size: 0.75rem;
-            font-weight: 500;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: var(--lumon-teal);
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--lumon-teal);
-            border-radius: 4px;
-            transition: all 0.25s ease;
+          order: 3;
+          margin-left: 44px;
         }
+      }
 
-        .domain-link:hover {
-            background: var(--lumon-teal);
-            color: white;
+      /* Reduced motion */
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
         }
+      }
 
-        /* Install */
-        .install-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 1.25rem;
-            margin-top: 1rem;
+      /* Focus states */
+      :focus-visible {
+        outline: 2px solid var(--lumon-teal);
+        outline-offset: 2px;
+      }
+
+      /* Header Bandwidth Indicator */
+      .header-bandwidth {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        padding: 0.5rem 0.75rem;
+        background: var(--bg-paper);
+        border: 1px solid var(--border-light);
+        border-radius: 4px;
+      }
+
+      .header-bandwidth .bandwidth-used {
+        color: var(--lumon-teal);
+        font-weight: 500;
+      }
+
+      .header-bandwidth .bandwidth-bar {
+        width: 60px;
+        height: 4px;
+        background: var(--border-light);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .header-bandwidth .bandwidth-fill {
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          var(--lumon-teal),
+          var(--lumon-teal-light)
+        );
+        border-radius: 2px;
+      }
+
+      /* Status Card */
+      .status-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        flex-shrink: 0;
+      }
+
+      .status-indicator.connected .status-dot {
+        background: #4a7c59;
+        box-shadow: 0 0 8px rgba(74, 124, 89, 0.5);
+        animation: pulse 2s infinite;
+      }
+
+      .status-indicator.disconnected .status-dot {
+        background: var(--text-muted);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
         }
-
-        .install-block {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
+        50% {
+          opacity: 0.6;
         }
+      }
 
-        .install-title {
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
+      .status-text {
+        font-size: 0.9375rem;
+        font-weight: 500;
+        color: var(--text-primary);
+      }
 
-        .install-hint {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 0.25rem;
-        }
+      .status-indicator.connected .status-text {
+        color: #4a7c59;
+      }
 
-        /* Empty state */
-        .empty-state {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-muted);
-            font-size: 0.875rem;
-        }
+      .active-tunnels {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
 
-        /* Config Section */
-        .config-description {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-        }
+      .active-tunnels-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
 
-        .config-example {
-            background: var(--bg-paper);
-            border: 1px solid var(--border-light);
-            border-radius: 4px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            overflow-x: auto;
-        }
+      .tunnel-badge {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--lumon-mint-pale);
+        color: var(--lumon-teal);
+        border-radius: 3px;
+      }
 
-        .config-example code {
-            font-family: var(--font-mono);
-            font-size: 0.8125rem;
-            color: var(--text-primary);
-            white-space: pre;
-        }
+      /* Collapsible Sections */
+      .collapsible .card-header {
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
 
-        .config-instructions {
-            font-size: 0.8125rem;
-            color: var(--text-secondary);
-        }
+      .collapsible .card-header:hover {
+        background: var(--bg-paper);
+      }
 
-        .config-instructions code {
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            background: var(--lumon-mint-pale);
-            padding: 0.25rem 0.5rem;
-            border-radius: 3px;
-            color: var(--lumon-teal);
-        }
+      .collapse-icon {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        transition: transform 0.25s ease;
+        margin-left: auto;
+      }
 
-        /* Linked Accounts */
-        .linked-accounts {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
+      .collapsible:not(.collapsed) .collapse-icon {
+        transform: rotate(90deg);
+      }
 
-        .account-item {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 0.875rem 1rem;
-            background: var(--bg-paper);
-            border: 1px solid var(--border-light);
-            border-radius: 6px;
-        }
+      .collapsible .collapsible-content {
+        max-height: 2000px;
+        overflow: hidden;
+        transition: max-height 0.35s ease, padding 0.35s ease;
+      }
 
-        .account-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
+      .collapsible.collapsed .collapsible-content {
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+      }
 
-        .account-icon svg {
-            width: 24px;
-            height: 24px;
-        }
+      .collapsible.collapsed .card-header {
+        padding-bottom: 1.5rem;
+      }
 
-        .account-icon.telegram {
-            background: transparent;
-        }
-
-        .account-icon.yandex {
-            background: transparent;
-        }
-
-        .account-info {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 0.125rem;
-        }
-
-        .account-name {
-            font-weight: 500;
-            color: var(--text-primary);
-            font-size: 0.9375rem;
-        }
-
-        .account-status {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        .account-status.linked {
-            color: #4a7c59;
-        }
-
-        .link-btn {
-            font-size: 0.75rem;
-            font-weight: 500;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: var(--lumon-teal);
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--lumon-teal);
-            border-radius: 4px;
-            transition: all 0.25s ease;
-            white-space: nowrap;
-        }
-
-        .link-btn:hover {
-            background: var(--lumon-teal);
-            color: white;
-        }
-
-        /* Stats Section */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1.5rem;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 1rem;
-            background: var(--bg-paper);
-            border: 1px solid var(--border-light);
-            border-radius: 6px;
-        }
-
-        .stat-value {
-            font-family: var(--font-mono);
-            font-size: 1.5rem;
-            font-weight: 500;
-            color: var(--lumon-teal);
-        }
-
-        .stat-label {
-            font-size: 0.8125rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-        }
-
-        .stat-limit {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 0.25rem;
-        }
-
-        .progress-bar {
-            height: 4px;
-            background: var(--border-light);
-            border-radius: 2px;
-            margin-top: 0.75rem;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--lumon-teal), var(--lumon-teal-light));
-            border-radius: 2px;
-            transition: width 0.3s ease;
-        }
-
-        @media (max-width: 500px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Download Section */
-        .download-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 0.75rem;
-        }
-
-        .download-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 1rem 0.75rem;
-            background: var(--bg-paper);
-            border: 1px solid var(--border-light);
-            border-radius: 6px;
-            text-decoration: none;
-            color: var(--text-primary);
-            transition: all 0.25s ease;
-        }
-
-        .download-btn:hover {
-            border-color: var(--lumon-teal);
-            background: var(--lumon-mint-pale);
-        }
-
-        .download-btn:hover .download-icon svg {
-            color: var(--lumon-teal);
-        }
-
-        .download-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .download-icon svg {
-            width: 24px;
-            height: 24px;
-            color: var(--text-muted);
-            transition: color 0.25s ease;
-        }
-
-        .download-label {
-            font-size: 0.6875rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-secondary);
-            text-align: center;
-        }
-
-        @media (max-width: 500px) {
-            .download-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        .download-note {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 1rem;
-            text-align: center;
-        }
-
-        .download-note code {
-            font-family: var(--font-mono);
-            font-size: 0.6875rem;
-            background: var(--lumon-mint-pale);
-            padding: 0.2rem 0.4rem;
-            border-radius: 3px;
-            color: var(--lumon-teal);
-        }
-
-        /* Footer */
-        .footer {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 0 2rem 2rem;
-            text-align: center;
-        }
-
-        .footer-content {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-        }
-
-        .footer-text {
-            font-family: var(--font-mono);
-            font-size: 0.6875rem;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            text-transform: uppercase;
-        }
-
-        .footer-separator {
-            width: 20px;
-            height: 1px;
-            background: var(--border-light);
-        }
-
-        .footer-link {
-            font-family: var(--font-mono);
-            font-size: 0.6875rem;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            text-decoration: none;
-            transition: color 0.2s ease;
-        }
-
-        .footer-link:hover {
-            color: var(--lumon-teal);
-        }
-
-        /* Responsive */
-        @media (max-width: 640px) {
-            .header {
-                padding: 1rem;
-            }
-
-            .header-inner {
-                flex-direction: column;
-                gap: 1rem;
-            }
-
-            .main {
-                padding: 1.5rem 1rem;
-            }
-
-            .card-body {
-                padding: 1rem;
-            }
-
-            .token-display {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .copy-btn {
-                width: 100%;
-            }
-
-            .domain-item {
-                flex-wrap: wrap;
-                gap: 0.75rem;
-            }
-
-            .domain-name {
-                width: 100%;
-                order: 2;
-                padding-left: 44px;
-            }
-
-            .domain-link {
-                order: 3;
-                margin-left: 44px;
-            }
-        }
-
-        /* Reduced motion */
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
-
-        /* Focus states */
-        :focus-visible {
-            outline: 2px solid var(--lumon-teal);
-            outline-offset: 2px;
-        }
-
-        /* Header Bandwidth Indicator */
-        .header-bandwidth {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            padding: 0.5rem 0.75rem;
-            background: var(--bg-paper);
-            border: 1px solid var(--border-light);
-            border-radius: 4px;
-        }
-
-        .header-bandwidth .bandwidth-used {
-            color: var(--lumon-teal);
-            font-weight: 500;
-        }
-
-        .header-bandwidth .bandwidth-bar {
-            width: 60px;
-            height: 4px;
-            background: var(--border-light);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .header-bandwidth .bandwidth-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--lumon-teal), var(--lumon-teal-light));
-            border-radius: 2px;
-        }
-
-        /* Status Card */
+      @media (max-width: 640px) {
         .status-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-light);
-            border-radius: 8px;
-            padding: 1rem 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            box-shadow: var(--shadow-soft);
+          flex-direction: column;
+          align-items: flex-start;
         }
 
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
+        .header-bandwidth {
+          display: none;
         }
-
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            flex-shrink: 0;
-        }
-
-        .status-indicator.connected .status-dot {
-            background: #4a7c59;
-            box-shadow: 0 0 8px rgba(74, 124, 89, 0.5);
-            animation: pulse 2s infinite;
-        }
-
-        .status-indicator.disconnected .status-dot {
-            background: var(--text-muted);
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
-
-        .status-text {
-            font-size: 0.9375rem;
-            font-weight: 500;
-            color: var(--text-primary);
-        }
-
-        .status-indicator.connected .status-text {
-            color: #4a7c59;
-        }
-
-        .active-tunnels {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-
-        .active-tunnels-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .tunnel-badge {
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
-            background: var(--lumon-mint-pale);
-            color: var(--lumon-teal);
-            border-radius: 3px;
-        }
-
-        /* Collapsible Sections */
-        .collapsible .card-header {
-            cursor: pointer;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .collapsible .card-header:hover {
-            background: var(--bg-paper);
-        }
-
-        .collapse-icon {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            transition: transform 0.25s ease;
-            margin-left: auto;
-        }
-
-        .collapsible:not(.collapsed) .collapse-icon {
-            transform: rotate(90deg);
-        }
-
-        .collapsible .collapsible-content {
-            max-height: 2000px;
-            overflow: hidden;
-            transition: max-height 0.35s ease, padding 0.35s ease;
-        }
-
-        .collapsible.collapsed .collapsible-content {
-            max-height: 0;
-            padding-top: 0;
-            padding-bottom: 0;
-        }
-
-        .collapsible.collapsed .card-header {
-            padding-bottom: 1.5rem;
-        }
-
-        @media (max-width: 640px) {
-            .status-card {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .header-bandwidth {
-                display: none;
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <header class="header">
-        <div class="header-inner">
-            <div class="header-brand">
-                <div class="header-icon"></div>
-                <span class="header-title">GoPublic</span>
-            </div>
-            <div class="header-user">
-                <div class="header-bandwidth" title="Трафик сегодня">
-                    <span class="bandwidth-used">{{formatBytes .BandwidthToday}}</span>
-                    <span>/</span>
-                    <span>{{formatBytes .BandwidthLimit}}</span>
-                    <div class="bandwidth-bar">
-                        <div class="bandwidth-fill" style="width: {{bandwidthPercent .BandwidthToday .BandwidthLimit}}%"></div>
-                    </div>
-                </div>
-                <div class="user-badge">
-                    {{if .User.PhotoURL}}
-                    <div class="user-avatar">
-                        <img src="{{.User.PhotoURL}}" alt="{{.User.FirstName}}">
-                    </div>
-                    {{end}}
-                    <span>{{.User.FirstName}}{{if .User.LastName}} {{.User.LastName}}{{end}}</span>
-                </div>
-                <a href="/logout" class="logout-link">Выйти</a>
-            </div>
+      <div class="header-inner">
+        <div class="header-brand">
+          <div class="header-icon"></div>
+          <span class="header-title">GoPublic</span>
         </div>
-    </header>
-
-    <main class="main">
-        <!-- Connection Status -->
-        <div class="status-card">
-            <div class="status-indicator {{if .IsConnected}}connected{{else}}disconnected{{end}}">
-                <span class="status-dot"></span>
-                <span class="status-text">{{if .IsConnected}}Клиент подключён{{else}}Клиент не подключён{{end}}</span>
+        <div class="header-user">
+          <div class="header-bandwidth" title="Трафик сегодня">
+            <span class="bandwidth-used">{{formatBytes .BandwidthToday}}</span>
+            <span>/</span>
+            <span>{{formatBytes .BandwidthLimit}}</span>
+            <div class="bandwidth-bar">
+              <div
+                class="bandwidth-fill"
+                style="width: {{bandwidthPercent .BandwidthToday .BandwidthLimit}}%"
+              ></div>
             </div>
-            {{if .IsConnected}}
-            <div class="active-tunnels">
-                <span class="active-tunnels-label">Активные туннели:</span>
-                {{range .ActiveDomains}}
-                <span class="tunnel-badge">{{.}}</span>
-                {{end}}
-            </div>
-            {{else}}
-            <div class="active-tunnels">
-                <span class="active-tunnels-label" style="color: var(--text-muted);">Запустите клиент для создания туннеля</span>
+          </div>
+          <div class="user-badge">
+            {{if .User.PhotoURL}}
+            <div class="user-avatar">
+              <img src="{{.User.PhotoURL}}" alt="{{.User.FirstName}}" />
             </div>
             {{end}}
+            <span
+              >{{.User.FirstName}}{{if .User.LastName}}
+              {{.User.LastName}}{{end}}</span
+            >
+          </div>
+          <a href="/logout" class="logout-link">Выйти</a>
         </div>
-
-        <!-- Domains Section (moved up) -->
-        <section class="card">
-            <div class="card-header">
-                <div class="card-label">Назначенные домены</div>
+      </div>
+    </header>
+    <main class="main">
+      <!-- Connection Status -->
+      <div class="status-card">
+        <div
+          class="status-indicator {{if .IsConnected}}connected{{else}}disconnected{{end}}"
+        >
+          <span class="status-dot"></span>
+          <span class="status-text"
+            >{{if .IsConnected}}Клиент подключён{{else}}Клиент не
+            подключён{{end}}</span
+          >
+        </div>
+        {{if .IsConnected}}
+        <div class="active-tunnels">
+          <span class="active-tunnels-label">Активные туннели:</span>
+          {{range .ActiveDomains}}
+          <span class="tunnel-badge">{{.}}</span>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="active-tunnels">
+          <span class="active-tunnels-label" style="color: var(--text-muted)"
+            >Запустите клиент для создания туннеля</span
+          >
+        </div>
+        {{end}}
+      </div>
+      <!-- Domains Section (moved up) -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-label">Назначенные домены</div>
+        </div>
+        <div class="card-body">
+          <div class="domain-create">
+            <input
+              id="new-domain"
+              class="domain-input"
+              type="text"
+              placeholder="my-project"
+              autocomplete="off"
+            />
+            <button
+              class="domain-create-btn"
+              type="button"
+              onclick="createDomain()"
+            >
+              Создать домен
+            </button>
+            <div class="domain-help">
+              Допустимы латинские буквы, цифры и дефис. Активные туннели будут
+              остановлены.
             </div>
-            <div class="card-body">
-                {{if .Domains}}
-                <ul class="domain-list">
-                    {{range $i, $d := .Domains}}
-                    <li class="domain-item">
-                        <span class="domain-number">{{$i}}</span>
-                        <span class="domain-name">{{$d.Name}}.{{$.RootDomain}}</span>
-                        <a href="https://{{$d.Name}}.{{$.RootDomain}}" class="domain-link" target="_blank">Открыть</a>
-                    </li>
-                    {{end}}
-                </ul>
-                {{else}}
-                <div class="empty-state">Домены пока не назначены</div>
-                {{end}}
-            </div>
-        </section>
-
-        {{if .Domains}}
-        <section class="card">
-            <div class="card-header">
-                <div class="card-label">Конфигурация проекта</div>
-            </div>
-            <div class="card-body">
-                <p class="config-description">
-                    Создайте файл <code>gopublic.yaml</code> в корне проекта для запуска нескольких туннелей:
-                </p>
-                <div class="code-block">
-                    <pre class="config-example" id="config-yaml"><code>version: "1"
+          </div>
+          {{if .Domains}}
+          <ul class="domain-list">
+            {{range $i, $d := .Domains}}
+            <li class="domain-item">
+              <span class="domain-number">{{$i}}</span>
+              <span class="domain-name">{{$d.Name}}.{{$.RootDomain}}</span>
+              <div class="domain-actions">
+                <button
+                  class="domain-action-btn"
+                  type="button"
+                  onclick="renameDomain('{{$d.Name}}')"
+                >
+                  Переименовать
+                </button>
+                <button
+                  class="domain-action-btn danger"
+                  type="button"
+                  onclick="deleteDomain('{{$d.Name}}')"
+                >
+                  Удалить
+                </button>
+                <a
+                  href="https://{{$d.Name}}.{{$.RootDomain}}"
+                  class="domain-link"
+                  target="_blank"
+                  >Открыть</a
+                >
+              </div>
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div class="empty-state">Домены пока не назначены</div>
+          {{end}}
+        </div>
+      </section>
+      {{if .Domains}}
+      <section class="card">
+        <div class="card-header">
+          <div class="card-label">Конфигурация проекта</div>
+        </div>
+        <div class="card-body">
+          <p class="config-description">
+            Создайте файл
+            <code>gopublic.yaml</code>
+            в корне проекта для запуска нескольких туннелей:
+          </p>
+          <div class="code-block">
+            <pre class="config-example" id="config-yaml">
+                            <code>
+                                version: "1"
 tunnels:
 {{- range $i, $d := .Domains}}
   tunnel-{{$i}}:
     proto: http
     addr: "{{add 3000 $i}}"
-    subdomain: {{$d.Name}}{{end}}</code></pre>
-                    <button class="copy-icon-btn" data-tooltip="Скопировано!" onclick="copyCode('config-yaml', this)" aria-label="Копировать">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="config-instructions" style="display: grid; gap: 0.5rem;">
-                    <p><strong>Параметры туннеля:</strong></p>
-                    <ul style="margin-left: 1rem; display: grid; gap: 0.4rem;">
-                        <li><code>proto</code> — протокол: <code>http</code>, <code>https</code> или <code>tcp</code></li>
-                        <li><code>addr</code> — локальный порт (<code>"3000"</code>) или адрес (<code>"localhost:3000"</code>)</li>
-                        <li><code>subdomain</code> — поддомен для привязки на сервере</li>
-                    </ul>
-                    <p style="margin-top: 0.5rem;"><strong>Запуск клиента:</strong></p>
-                    <ul style="margin-left: 1rem; display: grid; gap: 0.4rem;">
-                        <li><code>gopublic start</code> — читает <code>gopublic.yaml</code> и поднимает все туннели</li>
-                        <li><code>gopublic start 8080</code> — без конфига, один туннель на указанный порт</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-        {{end}}
-
-        <!-- Quick Start (collapsible, collapsed by default) -->
-        <section class="card collapsible collapsed" id="quickstart-section">
-            <div class="card-header" onclick="toggleSection('quickstart')">
-                <div class="card-label">Установка и настройка</div>
-                <span class="collapse-icon">▶</span>
-            </div>
-            <div class="card-body collapsible-content">
-                <p class="config-description">Быстрая установка одной командой:</p>
-
-                <div class="install-grid">
-                    <div class="install-block">
-                        <div class="install-title">macOS / Linux</div>
-                        <div class="code-block">
-                            <pre class="config-example" id="install-unix"><code>curl -sSL https://{{.RootDomain}}/install.sh | sh</code></pre>
-                            <button class="copy-icon-btn" data-tooltip="Скопировано!" onclick="event.stopPropagation(); copyCode('install-unix', this)" aria-label="Копировать">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="install-block">
-                        <div class="install-title">Windows (PowerShell)</div>
-                        <div class="code-block">
-                            <pre class="config-example" id="install-win"><code>[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iwr -useb https://{{.RootDomain}}/install.ps1 | iex</code></pre>
-                            <button class="copy-icon-btn" data-tooltip="Скопировано!" onclick="event.stopPropagation(); copyCode('install-win', this)" aria-label="Копировать">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="install-hint">Первая часть команды включает TLS 1.2 для совместимости со старыми версиями Windows</div>
-                    </div>
-                </div>
-
-                {{if .GitHubRepo}}
-                <p class="config-description" style="margin-top: 1.5rem;">Или скачайте напрямую:</p>
-                <div class="download-grid">
-                    <a href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-macos-arm64" class="download-btn">
-                        <span class="download-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-                            </svg>
-                        </span>
-                        <span class="download-label">macOS ARM</span>
-                    </a>
-                    <a href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-macos-amd64" class="download-btn">
-                        <span class="download-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-                            </svg>
-                        </span>
-                        <span class="download-label">macOS Intel</span>
-                    </a>
-                    <a href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-linux-amd64" class="download-btn">
-                        <span class="download-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139z"/>
-                            </svg>
-                        </span>
-                        <span class="download-label">Linux x64</span>
-                    </a>
-                    <a href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-windows-amd64.exe" class="download-btn">
-                        <span class="download-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
-                            </svg>
-                        </span>
-                        <span class="download-label">Windows x64</span>
-                    </a>
-                </div>
-                {{end}}
-
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-light);">
-                    <p class="config-description" style="margin-bottom: 0.75rem;"><strong>Токен авторизации</strong></p>
-                    <div class="token-display-inline">
-                        <div class="token-value" id="token">gopublic auth {{.Token}}</div>
-                        <button class="copy-icon-btn" data-tooltip="Скопировано!" onclick="event.stopPropagation(); copyCode('token', this)" aria-label="Копировать">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="token-actions">
-                        <p class="token-instructions">
-                            Выполните эту команду для авторизации клиента
-                        </p>
-                        <button class="regenerate-btn" id="regenerate-btn" onclick="event.stopPropagation(); regenerateToken()">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            Перегенерировать
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Account Settings (collapsible) -->
-        <section class="card collapsible" id="account-section">
-            <div class="card-header" onclick="toggleSection('account')">
-                <div class="card-label">Настройки аккаунта</div>
-                <span class="collapse-icon">▶</span>
-            </div>
-            <div class="card-body collapsible-content">
-                <p class="config-description" style="margin-bottom: 1rem;"><strong>Статистика трафика</strong></p>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <div class="stat-value">{{formatBytes .BandwidthToday}}</div>
-                        <div class="stat-label">Использовано сегодня</div>
-                        <div class="stat-limit">из {{formatBytes .BandwidthLimit}}</div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: {{bandwidthPercent .BandwidthToday .BandwidthLimit}}%"></div>
-                        </div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value">{{formatBytes .BandwidthTotal}}</div>
-                        <div class="stat-label">Всего за всё время</div>
-                    </div>
-                </div>
-
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-light);">
-                    <p class="config-description" style="margin-bottom: 1rem;"><strong>Привязанные аккаунты</strong></p>
-                    <div class="linked-accounts">
-                    <div class="account-item">
-                        <div class="account-icon telegram">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
-                                <circle cx="500" cy="500" r="500" fill="#419fd9"/>
-                                <path fill="#fff" d="M226.3 494.7c145.8-63.5 243-105.4 291.4-125.6 138.8-57.8 167.6-67.8 186.5-68.1 4.1-.1 13.4 1 19.4 5.9 5 4.2 6.4 9.8 7.1 13.8.7 4 1.5 13 .8 20.1-7.6 79.9-40.5 273.7-57.3 363.2-7.1 37.9-21.1 50.5-34.6 51.8-29.4 2.8-51.8-19.5-80.3-38.2-44.5-29.3-69.7-47.5-112.9-76.1-50-33-17.6-51.2 10.9-80.8 7.5-7.8 136.8-125.4 139.3-136.1.3-1.3.6-6.3-2.4-8.9s-7.3-1.7-10.5-1c-4.5 1-75.5 48-213 141-20.2 13.8-38.4 20.6-54.8 20.2-18-.4-52.8-10.2-78.6-18.6-31.6-10.3-56.8-15.8-54.6-33.4 1.2-9.1 13.9-18.4 38.2-27.9z"/>
-                            </svg>
-                        </div>
-                        <div class="account-info">
-                            <span class="account-name">Telegram</span>
-                            {{if .User.TelegramID}}
-                            <span class="account-status linked">Привязан</span>
-                            {{else}}
-                            <span class="account-status">Не привязан</span>
-                            {{end}}
-                        </div>
-                        {{if not .User.TelegramID}}
-                        {{if .TelegramEnabled}}
-                        <a href="/link/telegram" class="link-btn" onclick="event.stopPropagation();">Привязать</a>
-                        {{end}}
-                        {{end}}
-                    </div>
-
-                    <div class="account-item">
-                        <div class="account-icon yandex">
-                            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                                <path d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z" fill="#fc3f1d"/>
-                                <path d="M13.3197 18.7368H15.3281V5.26318H12.1377C8.92298 5.26318 7.13928 7.04556 7.13928 9.57899C7.13928 11.7368 8.15385 12.9474 9.95754 14.2105L7 18.7368H9.19751L12.5771 13.5789L11.3639 12.6316C9.88219 11.5263 9.12304 10.7368 9.12304 9.36843C9.12304 7.94738 10.1877 6.94738 12.1627 6.94738H13.3197V18.7368Z" fill="white"/>
-                            </svg>
-                        </div>
-                        <div class="account-info">
-                            <span class="account-name">Яндекс</span>
-                            {{if .User.YandexID}}
-                            <span class="account-status linked">Привязан</span>
-                            {{else}}
-                            <span class="account-status">Не привязан</span>
-                            {{end}}
-                        </div>
-                        {{if not .User.YandexID}}
-                        {{if .YandexEnabled}}
-                        <a href="/auth/yandex" class="link-btn" onclick="event.stopPropagation();">Привязать</a>
-                        {{end}}
-                        {{end}}
-                    </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <div class="footer-content">
-            <a href="https://makeitbeta.ru" target="_blank" rel="noopener noreferrer" class="footer-link">Разработано в Make It Beta</a>
-            <span class="footer-separator"></span>
-            <a href="/terms" class="footer-link">Условия использования</a>
-            <span class="footer-separator"></span>
-            <a href="/abuse" class="footer-link">Сообщить о нарушении</a>
-            {{if .GitHubRepo}}
-            <span class="footer-separator"></span>
-            <a href="https://github.com/{{.GitHubRepo}}/releases" target="_blank" rel="noopener noreferrer" class="footer-link">{{.Version}}</a>
-            {{end}}
+    subdomain: {{$d.Name}}{{end}}
+                            </code>
+                        </pre>
+            <button
+              class="copy-icon-btn"
+              data-tooltip="Скопировано!"
+              onclick="copyCode('config-yaml', this)"
+              aria-label="Копировать"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+            </button>
+          </div>
+          <div class="config-instructions" style="display: grid; gap: 0.5rem">
+            <p>
+              <strong>Параметры туннеля:</strong>
+            </p>
+            <ul style="margin-left: 1rem; display: grid; gap: 0.4rem">
+              <li>
+                <code>proto</code>
+                — протокол:
+                <code>http</code>
+                ,
+                <code>https</code>
+                или
+                <code>tcp</code>
+              </li>
+              <li>
+                <code>addr</code>
+                — локальный порт (
+                <code>"3000"</code>
+                ) или адрес (
+                <code>"localhost:3000"</code>
+                )
+              </li>
+              <li>
+                <code>subdomain</code>
+                — поддомен для привязки на сервере
+              </li>
+            </ul>
+            <p style="margin-top: 0.5rem">
+              <strong>Запуск клиента:</strong>
+            </p>
+            <ul style="margin-left: 1rem; display: grid; gap: 0.4rem">
+              <li>
+                <code>gopublic start</code>
+                — читает
+                <code>gopublic.yaml</code>
+                и поднимает все туннели
+              </li>
+              <li>
+                <code>gopublic start 8080</code>
+                — без конфига, один туннель на указанный порт
+              </li>
+            </ul>
+          </div>
         </div>
+      </section>
+      {{end}}
+      <!-- Quick Start (collapsible, collapsed by default) -->
+      <section class="card collapsible collapsed" id="quickstart-section">
+        <div class="card-header" onclick="toggleSection('quickstart')">
+          <div class="card-label">Установка и настройка</div>
+          <span class="collapse-icon">▶</span>
+        </div>
+        <div class="card-body collapsible-content">
+          <p class="config-description">Быстрая установка одной командой:</p>
+          <div class="install-grid">
+            <div class="install-block">
+              <div class="install-title">macOS / Linux</div>
+              <div class="code-block">
+                <pre class="config-example" id="install-unix">
+                                    <code>curl -sSL https://{{.RootDomain}}/install.sh | sh</code>
+                                </pre>
+                <button
+                  class="copy-icon-btn"
+                  data-tooltip="Скопировано!"
+                  onclick="event.stopPropagation(); copyCode('install-unix', this)"
+                  aria-label="Копировать"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="install-block">
+              <div class="install-title">Windows (PowerShell)</div>
+              <div class="code-block">
+                <pre class="config-example" id="install-win">
+                                    <code>[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iwr -useb https://{{.RootDomain}}/install.ps1 | iex</code>
+                                </pre>
+                <button
+                  class="copy-icon-btn"
+                  data-tooltip="Скопировано!"
+                  onclick="event.stopPropagation(); copyCode('install-win', this)"
+                  aria-label="Копировать"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <div class="install-hint">
+                Первая часть команды включает TLS 1.2 для совместимости со
+                старыми версиями Windows
+              </div>
+            </div>
+          </div>
+          {{if .GitHubRepo}}
+          <p class="config-description" style="margin-top: 1.5rem">
+            Или скачайте напрямую:
+          </p>
+          <div class="download-grid">
+            <a
+              href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-macos-arm64"
+              class="download-btn"
+            >
+              <span class="download-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"
+                  />
+                </svg>
+              </span>
+              <span class="download-label">macOS ARM</span>
+            </a>
+            <a
+              href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-macos-amd64"
+              class="download-btn"
+            >
+              <span class="download-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"
+                  />
+                </svg>
+              </span>
+              <span class="download-label">macOS Intel</span>
+            </a>
+            <a
+              href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-linux-amd64"
+              class="download-btn"
+            >
+              <span class="download-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139z"
+                  />
+                </svg>
+              </span>
+              <span class="download-label">Linux x64</span>
+            </a>
+            <a
+              href="https://github.com/{{.GitHubRepo}}/releases/latest/download/gopublic-windows-amd64.exe"
+              class="download-btn"
+            >
+              <span class="download-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"
+                  />
+                </svg>
+              </span>
+              <span class="download-label">Windows x64</span>
+            </a>
+          </div>
+          {{end}}
+          <div
+            style="
+              margin-top: 1.5rem;
+              padding-top: 1.5rem;
+              border-top: 1px solid var(--border-light);
+            "
+          >
+            <p class="config-description" style="margin-bottom: 0.75rem">
+              <strong>Токен авторизации</strong>
+            </p>
+            <div class="token-display-inline">
+              <div class="token-value" id="token">gopublic auth {{.Token}}</div>
+              <button
+                class="copy-icon-btn"
+                data-tooltip="Скопировано!"
+                onclick="event.stopPropagation(); copyCode('token', this)"
+                aria-label="Копировать"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div class="token-actions">
+              <p class="token-instructions">
+                Выполните эту команду для авторизации клиента
+              </p>
+              <button
+                class="regenerate-btn"
+                id="regenerate-btn"
+                onclick="event.stopPropagation(); regenerateToken()"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Перегенерировать
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- Account Settings (collapsible) -->
+      <section class="card collapsible" id="account-section">
+        <div class="card-header" onclick="toggleSection('account')">
+          <div class="card-label">Настройки аккаунта</div>
+          <span class="collapse-icon">▶</span>
+        </div>
+        <div class="card-body collapsible-content">
+          <p class="config-description" style="margin-bottom: 1rem">
+            <strong>Статистика трафика</strong>
+          </p>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-value">{{formatBytes .BandwidthToday}}</div>
+              <div class="stat-label">Использовано сегодня</div>
+              <div class="stat-limit">из {{formatBytes .BandwidthLimit}}</div>
+              <div class="progress-bar">
+                <div
+                  class="progress-fill"
+                  style="width: {{bandwidthPercent .BandwidthToday .BandwidthLimit}}%"
+                ></div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">{{formatBytes .BandwidthTotal}}</div>
+              <div class="stat-label">Всего за всё время</div>
+            </div>
+          </div>
+          <div
+            style="
+              margin-top: 1.5rem;
+              padding-top: 1.5rem;
+              border-top: 1px solid var(--border-light);
+            "
+          >
+            <p class="config-description" style="margin-bottom: 1rem">
+              <strong>Привязанные аккаунты</strong>
+            </p>
+            <div class="linked-accounts">
+              <div class="account-item">
+                <div class="account-icon telegram">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 1000 1000"
+                  >
+                    <circle cx="500" cy="500" r="500" fill="#419fd9" />
+                    <path
+                      fill="#fff"
+                      d="M226.3 494.7c145.8-63.5 243-105.4 291.4-125.6 138.8-57.8 167.6-67.8 186.5-68.1 4.1-.1 13.4 1 19.4 5.9 5 4.2 6.4 9.8 7.1 13.8.7 4 1.5 13 .8 20.1-7.6 79.9-40.5 273.7-57.3 363.2-7.1 37.9-21.1 50.5-34.6 51.8-29.4 2.8-51.8-19.5-80.3-38.2-44.5-29.3-69.7-47.5-112.9-76.1-50-33-17.6-51.2 10.9-80.8 7.5-7.8 136.8-125.4 139.3-136.1.3-1.3.6-6.3-2.4-8.9s-7.3-1.7-10.5-1c-4.5 1-75.5 48-213 141-20.2 13.8-38.4 20.6-54.8 20.2-18-.4-52.8-10.2-78.6-18.6-31.6-10.3-56.8-15.8-54.6-33.4 1.2-9.1 13.9-18.4 38.2-27.9z"
+                    />
+                  </svg>
+                </div>
+                <div class="account-info">
+                  <span class="account-name">Telegram</span>
+                  {{if .User.TelegramID}}
+                  <span class="account-status linked">Привязан</span>
+                  {{else}}
+                  <span class="account-status">Не привязан</span>
+                  {{end}}
+                </div>
+                {{if not .User.TelegramID}} {{if .TelegramEnabled}}
+                <a
+                  href="/link/telegram"
+                  class="link-btn"
+                  onclick="event.stopPropagation();"
+                  >Привязать</a
+                >
+                {{end}} {{end}}
+              </div>
+              <div class="account-item">
+                <div class="account-icon yandex">
+                  <svg
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z"
+                      fill="#fc3f1d"
+                    />
+                    <path
+                      d="M13.3197 18.7368H15.3281V5.26318H12.1377C8.92298 5.26318 7.13928 7.04556 7.13928 9.57899C7.13928 11.7368 8.15385 12.9474 9.95754 14.2105L7 18.7368H9.19751L12.5771 13.5789L11.3639 12.6316C9.88219 11.5263 9.12304 10.7368 9.12304 9.36843C9.12304 7.94738 10.1877 6.94738 12.1627 6.94738H13.3197V18.7368Z"
+                      fill="white"
+                    />
+                  </svg>
+                </div>
+                <div class="account-info">
+                  <span class="account-name">Яндекс</span>
+                  {{if .User.YandexID}}
+                  <span class="account-status linked">Привязан</span>
+                  {{else}}
+                  <span class="account-status">Не привязан</span>
+                  {{end}}
+                </div>
+                {{if not .User.YandexID}} {{if .YandexEnabled}}
+                <a
+                  href="/auth/yandex"
+                  class="link-btn"
+                  onclick="event.stopPropagation();"
+                  >Привязать</a
+                >
+                {{end}} {{end}}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="footer-content">
+        <a
+          href="https://makeitbeta.ru"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+          >Разработано в Make It Beta</a
+        >
+        <span class="footer-separator"></span>
+        <a href="/terms" class="footer-link">Условия использования</a>
+        <span class="footer-separator"></span>
+        <a href="/abuse" class="footer-link">Сообщить о нарушении</a>
+        {{if .GitHubRepo}}
+        <span class="footer-separator"></span>
+        <a
+          href="https://github.com/{{.GitHubRepo}}/releases"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-link"
+          >{{.Version}}</a
+        >
+        {{end}}
+      </div>
     </footer>
-
     <script>
-        function getCsrfToken() {
-            const match = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
-            if (!match) return '';
-            // Use substring to handle base64 tokens that may contain '=' padding
-            return match.substring('csrf_token='.length);
-        }
+      function getCsrfToken() {
+        const match = document.cookie
+          .split("; ")
+          .find((row) => row.startsWith("csrf_token="));
+        if (!match) return "";
+        // Use substring to handle base64 tokens that may contain '=' padding
+        return match.substring("csrf_token=".length);
+      }
 
-        function copyCode(elementId, btn) {
-            const el = document.getElementById(elementId);
-            if (!el) return;
-
-            const text = el.textContent.trim();
-
-            const doFeedback = () => {
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.classList.remove('copied');
-                }, 1500);
-            };
-
-            if (!navigator.clipboard) {
-                const textarea = document.createElement('textarea');
-                textarea.value = text;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                doFeedback();
-                return;
+      function handleDomainResponse(response) {
+        return response
+          .json()
+          .catch(() => ({}))
+          .then((data) => {
+            if (!response.ok) {
+              throw new Error(data.error || "Ошибка сервера");
             }
+            return data;
+          });
+      }
 
-            navigator.clipboard.writeText(text).then(doFeedback);
+      function createDomain() {
+        const input = document.getElementById("new-domain");
+        if (!input) return;
+        const name = input.value.trim();
+        if (!name) {
+          alert("Введите имя поддомена");
+          return;
         }
 
-        function toggleSection(id) {
-            const section = document.getElementById(id + '-section');
-            if (!section) return;
-            const isCollapsed = section.classList.toggle('collapsed');
-            localStorage.setItem('gopublic_section_' + id, isCollapsed ? 'collapsed' : 'expanded');
+        fetch("/api/domains", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": getCsrfToken(),
+          },
+          body: JSON.stringify({ name }),
+        })
+          .then(handleDomainResponse)
+          .then(() => {
+            window.location.reload();
+          })
+          .catch((err) => {
+            alert("Ошибка: " + err.message);
+          });
+      }
+
+      function deleteDomain(name) {
+        if (
+          !confirm(
+            "Удалить домен " + name + "? Активные туннели будут остановлены."
+          )
+        ) {
+          return;
+        }
+        fetch("/api/domains/" + encodeURIComponent(name), {
+          method: "DELETE",
+          headers: {
+            "X-CSRF-Token": getCsrfToken(),
+          },
+        })
+          .then(handleDomainResponse)
+          .then(() => {
+            window.location.reload();
+          })
+          .catch((err) => {
+            alert("Ошибка: " + err.message);
+          });
+      }
+
+      function renameDomain(name) {
+        const newName = prompt("Новое имя для " + name + ":");
+        if (newName === null) {
+          return;
+        }
+        if (!newName.trim()) {
+          alert("Введите новое имя поддомена");
+          return;
+        }
+        if (
+          !confirm(
+            "Переименовать " +
+              name +
+              " в " +
+              newName +
+              "? Активные туннели будут остановлены."
+          )
+        ) {
+          return;
+        }
+        fetch("/api/domains/" + encodeURIComponent(name), {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": getCsrfToken(),
+          },
+          body: JSON.stringify({ new_name: newName }),
+        })
+          .then(handleDomainResponse)
+          .then(() => {
+            window.location.reload();
+          })
+          .catch((err) => {
+            alert("Ошибка: " + err.message);
+          });
+      }
+
+      function copyCode(elementId, btn) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+
+        const text = el.textContent.trim();
+
+        const doFeedback = () => {
+          btn.classList.add("copied");
+          setTimeout(() => {
+            btn.classList.remove("copied");
+          }, 1500);
+        };
+
+        if (!navigator.clipboard) {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textarea);
+          doFeedback();
+          return;
         }
 
-        // Restore collapsed state from localStorage on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            ['quickstart', 'account'].forEach(id => {
-                const section = document.getElementById(id + '-section');
-                if (!section) return;
-                const savedState = localStorage.getItem('gopublic_section_' + id);
-                // quickstart defaults to collapsed, account defaults to expanded
-                if (id === 'quickstart') {
-                    // Already collapsed by default in HTML, only expand if explicitly saved
-                    if (savedState === 'expanded') {
-                        section.classList.remove('collapsed');
-                    }
-                } else {
-                    // Account section: collapse only if explicitly saved
-                    if (savedState === 'collapsed') {
-                        section.classList.add('collapsed');
-                    }
-                }
-            });
+        navigator.clipboard.writeText(text).then(doFeedback);
+      }
+
+      function toggleSection(id) {
+        const section = document.getElementById(id + "-section");
+        if (!section) return;
+        const isCollapsed = section.classList.toggle("collapsed");
+        localStorage.setItem(
+          "gopublic_section_" + id,
+          isCollapsed ? "collapsed" : "expanded"
+        );
+      }
+
+      // Restore collapsed state from localStorage on page load
+      document.addEventListener("DOMContentLoaded", () => {
+        ["quickstart", "account"].forEach((id) => {
+          const section = document.getElementById(id + "-section");
+          if (!section) return;
+          const savedState = localStorage.getItem("gopublic_section_" + id);
+          // quickstart defaults to collapsed, account defaults to expanded
+          if (id === "quickstart") {
+            // Already collapsed by default in HTML, only expand if explicitly saved
+            if (savedState === "expanded") {
+              section.classList.remove("collapsed");
+            }
+          } else {
+            // Account section: collapse only if explicitly saved
+            if (savedState === "collapsed") {
+              section.classList.add("collapsed");
+            }
+          }
         });
+      });
 
-        function regenerateToken() {
-            if (!confirm('Вы уверены? Старый токен перестанет работать.\n\nВам нужно будет заново выполнить команду авторизации на всех устройствах.')) {
-                return;
-            }
-
-            const btn = document.getElementById('regenerate-btn');
-            const tokenEl = document.getElementById('token');
-            btn.disabled = true;
-            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Генерация...';
-
-            fetch('/api/regenerate-token', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': getCsrfToken()
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Ошибка сервера');
-                }
-                return response.json();
-            })
-            .then(data => {
-                tokenEl.textContent = data.command;
-                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg> Готово!';
-                btn.style.color = '#4a7c59';
-                btn.style.borderColor = '#4a7c59';
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Перегенерировать';
-                    btn.style.color = '';
-                    btn.style.borderColor = '';
-                }, 2000);
-            })
-            .catch(err => {
-                alert('Ошибка: ' + err.message);
-                btn.disabled = false;
-                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Перегенерировать';
-            });
+      function regenerateToken() {
+        if (
+          !confirm(
+            "Вы уверены? Старый токен перестанет работать.\n\nВам нужно будет заново выполнить команду авторизации на всех устройствах."
+          )
+        ) {
+          return;
         }
+
+        const btn = document.getElementById("regenerate-btn");
+        const tokenEl = document.getElementById("token");
+        btn.disabled = true;
+        btn.innerHTML =
+          '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Генерация...';
+
+        fetch("/api/regenerate-token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": getCsrfToken(),
+          },
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("Ошибка сервера");
+            }
+            return response.json();
+          })
+          .then((data) => {
+            tokenEl.textContent = data.command;
+            btn.innerHTML =
+              '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg> Готово!';
+            btn.style.color = "#4a7c59";
+            btn.style.borderColor = "#4a7c59";
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.innerHTML =
+                '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Перегенерировать';
+              btn.style.color = "";
+              btn.style.borderColor = "";
+            }, 2000);
+          })
+          .catch((err) => {
+            alert("Ошибка: " + err.message);
+            btn.disabled = false;
+            btn.innerHTML =
+              '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Перегенерировать';
+          });
+      }
     </script>
     <style>
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
         }
+        to {
+          transform: rotate(360deg);
+        }
+      }
 
-        /* Terms Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(26, 26, 46, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            padding: 1rem;
-        }
+      /* Terms Modal */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(26, 26, 46, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1rem;
+      }
 
-        .modal-overlay.hidden {
-            display: none;
-        }
+      .modal-overlay.hidden {
+        display: none;
+      }
 
-        .modal-content {
-            background: var(--bg-card);
-            border-radius: 12px;
-            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
-            max-width: 600px;
-            width: 100%;
-            max-height: 80vh;
-            display: flex;
-            flex-direction: column;
-        }
+      .modal-content {
+        background: var(--bg-card);
+        border-radius: 12px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+        max-width: 600px;
+        width: 100%;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+      }
 
-        .modal-header {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid var(--border-light);
-        }
+      .modal-header {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid var(--border-light);
+      }
 
-        .modal-header h2 {
-            font-size: 1.25rem;
-            font-weight: 500;
-            color: var(--lumon-teal);
-            margin: 0;
-        }
+      .modal-header h2 {
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: var(--lumon-teal);
+        margin: 0;
+      }
 
-        .modal-body {
-            padding: 1.5rem 2rem;
-            overflow-y: auto;
-            flex: 1;
-        }
+      .modal-body {
+        padding: 1.5rem 2rem;
+        overflow-y: auto;
+        flex: 1;
+      }
 
-        .modal-body p {
-            color: var(--text-secondary);
-            line-height: 1.6;
-            margin-bottom: 1rem;
-        }
+      .modal-body p {
+        color: var(--text-secondary);
+        line-height: 1.6;
+        margin-bottom: 1rem;
+      }
 
-        .modal-body ul {
-            color: var(--text-secondary);
-            padding-left: 1.5rem;
-            margin-bottom: 1rem;
-        }
+      .modal-body ul {
+        color: var(--text-secondary);
+        padding-left: 1.5rem;
+        margin-bottom: 1rem;
+      }
 
-        .modal-body li {
-            margin-bottom: 0.5rem;
-        }
+      .modal-body li {
+        margin-bottom: 0.5rem;
+      }
 
-        .modal-footer {
-            padding: 1.5rem 2rem;
-            border-top: 1px solid var(--border-light);
-            display: flex;
-            justify-content: flex-end;
-            gap: 1rem;
-        }
+      .modal-footer {
+        padding: 1.5rem 2rem;
+        border-top: 1px solid var(--border-light);
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+      }
 
-        .btn-accept {
-            padding: 0.75rem 2rem;
-            font-family: var(--font-primary);
-            font-size: 1rem;
-            font-weight: 500;
-            color: white;
-            background: linear-gradient(135deg, var(--lumon-teal), var(--lumon-teal-light));
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
+      .btn-accept {
+        padding: 0.75rem 2rem;
+        font-family: var(--font-primary);
+        font-size: 1rem;
+        font-weight: 500;
+        color: white;
+        background: linear-gradient(
+          135deg,
+          var(--lumon-teal),
+          var(--lumon-teal-light)
+        );
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
 
-        .btn-accept:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(13, 115, 119, 0.3);
-        }
+      .btn-accept:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(13, 115, 119, 0.3);
+      }
 
-        .btn-accept:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+      .btn-accept:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
     </style>
-
     {{if not .TermsAccepted}}
     <div id="terms-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Условия использования</h2>
-            </div>
-            <div class="modal-body">
-                <p>Для продолжения работы с сервисом необходимо принять условия использования.</p>
-
-                <p><strong>При использовании GoPublic запрещается:</strong></p>
-                <ul>
-                    <li>Распространение вредоносного ПО (вирусы, трояны, шпионские программы)</li>
-                    <li>Фишинг и мошенничество (поддельные страницы для кражи данных)</li>
-                    <li>Спам и массовые рассылки</li>
-                    <li>Размещение нелегального контента</li>
-                    <li>DDoS-атаки и обход блокировок</li>
-                </ul>
-
-                <p>Нарушение данных правил влечёт немедленную блокировку аккаунта без предупреждения.</p>
-
-                <p>Полный текст условий доступен на странице <a href="/terms" target="_blank" style="color: var(--lumon-teal);">Условия использования</a>.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn-accept" id="accept-terms-btn" onclick="acceptTerms()">
-                    Принимаю условия
-                </button>
-            </div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Условия использования</h2>
         </div>
+        <div class="modal-body">
+          <p>
+            Для продолжения работы с сервисом необходимо принять условия
+            использования.
+          </p>
+          <p>
+            <strong>При использовании GoPublic запрещается:</strong>
+          </p>
+          <ul>
+            <li>
+              Распространение вредоносного ПО (вирусы, трояны, шпионские
+              программы)
+            </li>
+            <li>
+              Фишинг и мошенничество (поддельные страницы для кражи данных)
+            </li>
+            <li>Спам и массовые рассылки</li>
+            <li>Размещение нелегального контента</li>
+            <li>DDoS-атаки и обход блокировок</li>
+          </ul>
+          <p>
+            Нарушение данных правил влечёт немедленную блокировку аккаунта без
+            предупреждения.
+          </p>
+          <p>
+            Полный текст условий доступен на странице
+            <a href="/terms" target="_blank" style="color: var(--lumon-teal)"
+              >Условия использования</a
+            >
+            .
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn-accept"
+            id="accept-terms-btn"
+            onclick="acceptTerms()"
+          >
+            Принимаю условия
+          </button>
+        </div>
+      </div>
     </div>
-
     <script>
-        function acceptTerms() {
-            const btn = document.getElementById('accept-terms-btn');
-            btn.disabled = true;
-            btn.textContent = 'Сохранение...';
+      function acceptTerms() {
+        const btn = document.getElementById("accept-terms-btn");
+        btn.disabled = true;
+        btn.textContent = "Сохранение...";
 
-            fetch('/api/accept-terms', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': getCsrfToken()
-                }
-            })
-            .then(response => {
-                if (!response.ok) throw new Error('Server error');
-                return response.json();
-            })
-            .then(data => {
-                document.getElementById('terms-modal').classList.add('hidden');
-            })
-            .catch(err => {
-                alert('Ошибка: ' + err.message);
-                btn.disabled = false;
-                btn.textContent = 'Принимаю условия';
-            });
-        }
+        fetch("/api/accept-terms", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": getCsrfToken(),
+          },
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error("Server error");
+            return response.json();
+          })
+          .then((data) => {
+            document.getElementById("terms-modal").classList.add("hidden");
+          })
+          .catch((err) => {
+            alert("Ошибка: " + err.message);
+            btn.disabled = false;
+            btn.textContent = "Принимаю условия";
+          });
+      }
     </script>
     {{end}}
-</body>
+  </body>
 </html>

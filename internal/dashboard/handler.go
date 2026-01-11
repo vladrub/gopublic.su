@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -17,7 +18,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,11 +39,15 @@ import (
 //go:embed templates/*
 var templateFS embed.FS
 
+var subdomainPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+var errAccessDenied = errors.New("access denied")
+
 // UserSessionProvider provides information about active user sessions.
 // This interface is implemented by server.UserSessionRegistry.
 type UserSessionProvider interface {
 	IsConnected(userID uint) bool
 	GetActiveDomains(userID uint) []string
+	DisconnectUser(userID uint)
 }
 
 type Handler struct {
@@ -57,6 +64,8 @@ type Handler struct {
 	UserSessions          UserSessionProvider // Optional: provides active session info
 	TelegramBot           *telegram.Bot       // Telegram bot for auth
 	TelegramWidgetEnabled bool                // If true, use legacy Telegram Login Widget
+	AllowedTelegramIDs    map[int64]struct{}
+	AllowedYandexIDs      map[string]struct{}
 }
 
 // SetUserSessions sets the user session provider for displaying connection status.
@@ -87,6 +96,8 @@ func NewHandlerWithConfig(cfg *config.Config) (*Handler, error) {
 		YandexClientID:      cfg.YandexClientID,
 		YandexClientSecret:  cfg.YandexClientSecret,
 		Session:             sessionMgr,
+		AllowedTelegramIDs:  buildTelegramIDMap(cfg.AllowedTelegramIDs),
+		AllowedYandexIDs:    buildYandexIDMap(cfg.AllowedYandexIDs),
 	}, nil
 }
 
@@ -107,10 +118,12 @@ func NewHandler() (*Handler, error) {
 	}
 
 	return &Handler{
-		BotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		BotName:  os.Getenv("TELEGRAM_BOT_NAME"),
-		Domain:   domain,
-		Session:  sessionMgr,
+		BotToken:           os.Getenv("TELEGRAM_BOT_TOKEN"),
+		BotName:            os.Getenv("TELEGRAM_BOT_NAME"),
+		Domain:             domain,
+		Session:            sessionMgr,
+		AllowedTelegramIDs: buildTelegramIDMap(parseAllowedTelegramIDs(os.Getenv("ALLOWED_TELEGRAM_IDS"))),
+		AllowedYandexIDs:   buildYandexIDMap(parseAllowedYandexIDs(os.Getenv("ALLOWED_YANDEX_IDS"))),
 	}, nil
 }
 
@@ -264,6 +277,11 @@ func (h *Handler) TelegramCallback(c *gin.Context) {
 
 	log.Printf("Telegram callback: id=%s, first_name=%s, photo_url=%s", idStr, firstName, photoURL)
 
+	if !h.isTelegramAllowed(tgID) {
+		c.String(http.StatusForbidden, "Access denied")
+		return
+	}
+
 	// Find or Create User
 	user, err := storage.GetUserByTelegramID(tgID)
 
@@ -335,6 +353,7 @@ func (h *Handler) TelegramCallback(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Failed to create session")
 		return
 	}
+	h.sendLoginNotification(user, "telegram")
 	c.Redirect(http.StatusTemporaryRedirect, "/")
 }
 
@@ -378,6 +397,163 @@ func (h *Handler) RegenerateToken(c *gin.Context) {
 	})
 }
 
+// CreateDomain handles POST /api/domains - creates a new domain for the user.
+func (h *Handler) CreateDomain(c *gin.Context) {
+	// Validate CSRF
+	cookieToken, err := c.Cookie("csrf_token")
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "CSRF token missing"})
+		return
+	}
+
+	requestToken := c.GetHeader("X-CSRF-Token")
+	if requestToken == "" || requestToken != cookieToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "CSRF token invalid"})
+		return
+	}
+
+	user, err := h.getUserFromSession(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	name, err := normalizeSubdomainName(req.Name)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subdomain"})
+		return
+	}
+
+	if err := storage.CreateDomain(&models.Domain{Name: name, UserID: user.ID}); err != nil {
+		if errors.Is(err, storage.ErrDuplicateKey) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Subdomain already taken"})
+			return
+		}
+		sentry.CaptureErrorWithContext(c, err, "Failed to create domain")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create domain"})
+		return
+	}
+
+	h.disconnectUserSession(user.ID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "name": name})
+}
+
+// DeleteDomain handles DELETE /api/domains/:name - deletes a domain for the user.
+func (h *Handler) DeleteDomain(c *gin.Context, name string) {
+	// Validate CSRF
+	cookieToken, err := c.Cookie("csrf_token")
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "CSRF token missing"})
+		return
+	}
+
+	requestToken := c.GetHeader("X-CSRF-Token")
+	if requestToken == "" || requestToken != cookieToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "CSRF token invalid"})
+		return
+	}
+
+	user, err := h.getUserFromSession(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	normalized, err := normalizeSubdomainName(name)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subdomain"})
+		return
+	}
+
+	if err := storage.DeleteDomain(user.ID, normalized); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Domain not found"})
+			return
+		}
+		sentry.CaptureErrorWithContext(c, err, "Failed to delete domain")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete domain"})
+		return
+	}
+
+	h.disconnectUserSession(user.ID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// RenameDomain handles PUT /api/domains/:name - renames a domain for the user.
+func (h *Handler) RenameDomain(c *gin.Context, oldName string) {
+	// Validate CSRF
+	cookieToken, err := c.Cookie("csrf_token")
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "CSRF token missing"})
+		return
+	}
+
+	requestToken := c.GetHeader("X-CSRF-Token")
+	if requestToken == "" || requestToken != cookieToken {
+		c.JSON(http.StatusForbidden, gin.H{"error": "CSRF token invalid"})
+		return
+	}
+
+	user, err := h.getUserFromSession(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	normalizedOld, err := normalizeSubdomainName(oldName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subdomain"})
+		return
+	}
+
+	var req struct {
+		NewName string `json:"new_name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	normalizedNew, err := normalizeSubdomainName(req.NewName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid new subdomain"})
+		return
+	}
+
+	if normalizedOld == normalizedNew {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Subdomain is unchanged"})
+		return
+	}
+
+	if err := storage.RenameDomain(user.ID, normalizedOld, normalizedNew); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Domain not found"})
+			return
+		}
+		if errors.Is(err, storage.ErrDuplicateKey) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Subdomain already taken"})
+			return
+		}
+		sentry.CaptureErrorWithContext(c, err, "Failed to rename domain")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rename domain"})
+		return
+	}
+
+	h.disconnectUserSession(user.ID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "name": normalizedNew})
+}
+
 func (h *Handler) getUserFromSession(c *gin.Context) (*models.User, error) {
 	session, err := h.Session.GetSession(c.Request)
 	if err != nil {
@@ -385,6 +561,162 @@ func (h *Handler) getUserFromSession(c *gin.Context) (*models.User, error) {
 	}
 
 	return storage.GetUserByID(session.UserID)
+}
+
+func (h *Handler) disconnectUserSession(userID uint) {
+	if h.UserSessions != nil {
+		h.UserSessions.DisconnectUser(userID)
+	}
+}
+
+func (h *Handler) sendAdminMessage(text string, parseMode string) {
+	if h.AdminTelegramID == 0 || h.BotToken == "" {
+		return
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", h.BotToken)
+
+	payload := map[string]interface{}{
+		"chat_id": h.AdminTelegramID,
+		"text":    text,
+	}
+	if parseMode != "" {
+		payload["parse_mode"] = parseMode
+	}
+
+	go func() {
+		jsonData, _ := json.Marshal(payload)
+		resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Printf("Failed to send Telegram notification: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+	}()
+}
+
+func (h *Handler) sendLoginNotification(user *models.User, source string) {
+	if user == nil {
+		return
+	}
+	name := strings.TrimSpace(strings.TrimSpace(user.FirstName + " " + user.LastName))
+	if name == "" {
+		name = user.Username
+	}
+	if name == "" {
+		name = fmt.Sprintf("user %d", user.ID)
+	}
+
+	message := fmt.Sprintf(
+		"✅ Вход\nИмя: %s\nID: %d\nИсточник: %s",
+		name,
+		user.ID,
+		source,
+	)
+	if user.Username != "" {
+		message += fmt.Sprintf("\nUsername: %s", user.Username)
+	}
+	if user.Email != "" {
+		message += fmt.Sprintf("\nEmail: %s", user.Email)
+	}
+
+	h.sendAdminMessage(message, "")
+}
+
+func (h *Handler) isTelegramAllowed(id int64) bool {
+	if len(h.AllowedTelegramIDs) == 0 {
+		return true
+	}
+	_, ok := h.AllowedTelegramIDs[id]
+	return ok
+}
+
+func (h *Handler) isYandexAllowed(id string) bool {
+	if len(h.AllowedYandexIDs) == 0 {
+		return true
+	}
+	_, ok := h.AllowedYandexIDs[id]
+	return ok
+}
+
+func normalizeSubdomainName(name string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if normalized == "" {
+		return "", fmt.Errorf("empty subdomain")
+	}
+	if strings.Contains(normalized, ".") {
+		return "", fmt.Errorf("subdomain must not contain dots")
+	}
+	if !subdomainPattern.MatchString(normalized) {
+		return "", fmt.Errorf("invalid subdomain format")
+	}
+	switch normalized {
+	case "app", "www", "api":
+		return "", fmt.Errorf("subdomain is reserved")
+	default:
+		return normalized, nil
+	}
+}
+
+func buildTelegramIDMap(ids []int64) map[int64]struct{} {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+func buildYandexIDMap(ids []string) map[string]struct{} {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+func parseAllowedTelegramIDs(raw string) []int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(part, 10, 64)
+		if err != nil {
+			log.Printf("Invalid ALLOWED_TELEGRAM_IDS entry: %q", part)
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func parseAllowedYandexIDs(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		ids = append(ids, part)
+	}
+	return ids
 }
 
 func (h *Handler) verifyTelegramHash(params map[string][]string) bool {
@@ -562,25 +894,7 @@ func (h *Handler) sendAbuseNotification(report *models.AbuseReport) {
 	if report.ReporterEmail != "" {
 		message += fmt.Sprintf("\n*Email:* %s", report.ReporterEmail)
 	}
-
-	// Send via Telegram Bot API
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", h.BotToken)
-
-	payload := map[string]interface{}{
-		"chat_id":    h.AdminTelegramID,
-		"text":       message,
-		"parse_mode": "Markdown",
-	}
-
-	go func() {
-		jsonData, _ := json.Marshal(payload)
-		resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
-		if err != nil {
-			log.Printf("Failed to send Telegram notification: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-	}()
+	h.sendAdminMessage(message, "Markdown")
 }
 
 // YandexUserInfo represents user info from Yandex OAuth
@@ -744,6 +1058,11 @@ func (h *Handler) YandexCallback(c *gin.Context) {
 	log.Printf("Yandex user parsed: ID=%s, AvatarID=%s, IsAvatarEmpty=%v, AvatarURL=%s",
 		yandexUser.ID, yandexUser.DefaultAvatarID, yandexUser.IsAvatarEmpty, yandexUser.GetAvatarURL())
 
+	if !h.isYandexAllowed(yandexUser.ID) {
+		c.String(http.StatusForbidden, "Access denied")
+		return
+	}
+
 	// Check if user is already logged in (linking account)
 	if existingUser, err := h.getUserFromSession(c); err == nil {
 		// User is logged in - link Yandex account to existing user
@@ -831,6 +1150,7 @@ func (h *Handler) YandexCallback(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Failed to create session")
 		return
 	}
+	h.sendLoginNotification(user, "yandex")
 
 	c.Redirect(http.StatusTemporaryRedirect, "/")
 }
@@ -885,6 +1205,11 @@ func (h *Handler) YandexTokenAuth(c *gin.Context) {
 
 	log.Printf("Yandex user (SDK) parsed: ID=%s, AvatarID=%s, IsAvatarEmpty=%v",
 		yandexUser.ID, yandexUser.DefaultAvatarID, yandexUser.IsAvatarEmpty)
+
+	if !h.isYandexAllowed(yandexUser.ID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
 
 	// Check if user is already logged in (linking account)
 	if existingUser, err := h.getUserFromSession(c); err == nil {
@@ -972,6 +1297,7 @@ func (h *Handler) YandexTokenAuth(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
+	h.sendLoginNotification(user, "yandex_sdk")
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -1027,6 +1353,11 @@ func (h *Handler) TelegramLinkCallback(c *gin.Context) {
 	idStr := data.Get("id")
 	var tgID int64
 	fmt.Sscanf(idStr, "%d", &tgID)
+
+	if !h.isTelegramAllowed(tgID) {
+		c.String(http.StatusForbidden, "Access denied")
+		return
+	}
 
 	// Check if this Telegram ID is already linked to another account
 	existingUser, err := storage.GetUserByTelegramID(tgID)
@@ -1136,6 +1467,13 @@ func (h *Handler) PollTelegramAuth(c *gin.Context) {
 
 		if login.IsLinking {
 			if err := h.handleTelegramLinkFromBot(c, login); err != nil {
+				if errors.Is(err, errAccessDenied) {
+					c.JSON(http.StatusForbidden, gin.H{
+						"status": "error",
+						"error":  "access denied",
+					})
+					return
+				}
 				c.JSON(http.StatusConflict, gin.H{
 					"status": "error",
 					"error":  err.Error(),
@@ -1144,6 +1482,13 @@ func (h *Handler) PollTelegramAuth(c *gin.Context) {
 			}
 		} else {
 			if err := h.handleTelegramLoginFromBot(c, login); err != nil {
+				if errors.Is(err, errAccessDenied) {
+					c.JSON(http.StatusForbidden, gin.H{
+						"status": "error",
+						"error":  "access denied",
+					})
+					return
+				}
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"status": "error",
 					"error":  err.Error(),
@@ -1158,6 +1503,10 @@ func (h *Handler) PollTelegramAuth(c *gin.Context) {
 
 // handleTelegramLoginFromBot creates/updates user and sets session
 func (h *Handler) handleTelegramLoginFromBot(c *gin.Context, login *telegram.PendingLogin) error {
+	if !h.isTelegramAllowed(login.TelegramID) {
+		return errAccessDenied
+	}
+
 	user, err := storage.GetUserByTelegramID(login.TelegramID)
 
 	if err == storage.ErrNotFound {
@@ -1219,11 +1568,19 @@ func (h *Handler) handleTelegramLoginFromBot(c *gin.Context, login *telegram.Pen
 		}
 	}
 
-	return h.Session.SetSession(c.Writer, user.ID)
+	if err := h.Session.SetSession(c.Writer, user.ID); err != nil {
+		return err
+	}
+	h.sendLoginNotification(user, "telegram_bot")
+	return nil
 }
 
 // handleTelegramLinkFromBot links Telegram to existing account
 func (h *Handler) handleTelegramLinkFromBot(c *gin.Context, login *telegram.PendingLogin) error {
+	if !h.isTelegramAllowed(login.TelegramID) {
+		return errAccessDenied
+	}
+
 	// Check if this Telegram is already linked to another account
 	existingUser, err := storage.GetUserByTelegramID(login.TelegramID)
 	if err == nil && existingUser.ID != login.UserID {

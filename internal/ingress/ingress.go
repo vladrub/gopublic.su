@@ -436,6 +436,12 @@ func (i *Ingress) serveDashboard(c *gin.Context) {
 		} else {
 			c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
 		}
+	case "/api/domains":
+		if c.Request.Method == http.MethodPost {
+			i.DashHandler.CreateDomain(c)
+		} else {
+			c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
+		}
 	case "/auth/yandex":
 		i.DashHandler.YandexAuth(c)
 	case "/auth/yandex/callback":
@@ -465,6 +471,22 @@ func (i *Ingress) serveDashboard(c *gin.Context) {
 			c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
 		}
 	default:
+		if strings.HasPrefix(c.Request.URL.Path, "/api/domains/") {
+			name := strings.TrimPrefix(c.Request.URL.Path, "/api/domains/")
+			if name == "" {
+				c.String(http.StatusBadRequest, "Domain name required")
+				return
+			}
+			switch c.Request.Method {
+			case http.MethodDelete:
+				i.DashHandler.DeleteDomain(c, name)
+			case http.MethodPut:
+				i.DashHandler.RenameDomain(c, name)
+			default:
+				c.String(http.StatusMethodNotAllowed, "Method Not Allowed")
+			}
+			return
+		}
 		// Serve avatar files
 		if strings.HasPrefix(c.Request.URL.Path, "/avatars/") {
 			i.DashHandler.ServeAvatar(c)

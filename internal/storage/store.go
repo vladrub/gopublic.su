@@ -30,6 +30,8 @@ type Store interface {
 	GetUserDomains(userID uint) ([]models.Domain, error)
 	ValidateDomainOwnership(domainName string, userID uint) (bool, error)
 	CreateDomain(domain *models.Domain) error
+	DeleteDomain(userID uint, domainName string) error
+	RenameDomain(userID uint, oldName, newName string) error
 
 	// Abuse report operations
 	CreateAbuseReport(report *models.AbuseReport) error
